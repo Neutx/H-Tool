@@ -1,0 +1,442 @@
+// H-Tool Database Schema
+// Comprehensive merchant operations platform for Shopify order cancellation management
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// IAM & Organization Models
+// ============================================
+
+model Organization {
+  id                String   @id @default(cuid())
+  name              String
+  shopifyStoreUrl   String?
+  websiteUrl        String?
+  hasShopifyDomain  Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  teamMembers       TeamMember[]
+  customers         Customer[]
+  orders            Order[]
+  products          Product[]
+  cancellationRequests CancellationRequest[]
+  cancellationRecords  CancellationRecord[]
+  rules             Rule[]
+  integrations      Integration[]
+  
+  @@map("organizations")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  firebaseUid   String   @unique
+  email         String   @unique
+  name          String?
+  avatar        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  teamMemberships TeamMember[]
+  
+  @@map("users")
+}
+
+model TeamMember {
+  id             String   @id @default(cuid())
+  role           String   @default("admin") // admin, warehouse_manager, support_agent
+  permissions    Json?
+  userId         String
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relations
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, organizationId])
+  @@map("team_members")
+}
+
+// ============================================
+// E-commerce Core Models
+// ============================================
+
+model Customer {
+  id                String   @id @default(cuid())
+  shopifyCustomerId String?  @unique
+  email             String?
+  phone             String?
+  name              String?
+  organizationId    String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  orders               Order[]
+  cancellationRequests CancellationRequest[]
+  cancellationRecords  CancellationRecord[]
+  
+  @@map("customers")
+}
+
+model Order {
+  id                  String   @id @default(cuid())
+  shopifyOrderId      String?  @unique
+  orderNumber         String
+  status              String   // open, pending, cancelled, fulfilled
+  fulfillmentStatus   String   // unfulfilled, partial, fulfilled
+  paymentStatus       String   // pending, paid, refunded, partially_refunded
+  totalAmount         Float
+  currency            String   @default("INR")
+  customerId          String
+  organizationId      String
+  orderDate           DateTime @default(now())
+  shippingAddress     Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  // Relations
+  customer             Customer              @relation(fields: [customerId], references: [id])
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lineItems            LineItem[]
+  cancellationRequests CancellationRequest[]
+  cancellationRecords  CancellationRecord[]
+  refundTransactions   RefundTransaction[]
+  inventoryAdjustments InventoryAdjustment[]
+  reviewQueueItems     ReviewQueueItem[]
+  orderStatusUpdates   OrderStatusUpdate[]
+  
+  @@map("orders")
+}
+
+model LineItem {
+  id                    String   @id @default(cuid())
+  shopifyLineItemId     String?
+  orderId               String
+  productId             String
+  sku                   String?
+  title                 String
+  quantity              Int
+  price                 Float
+  totalPrice            Float
+  taxAmount             Float?
+  inventoryManaged      Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relations
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  
+  @@map("line_items")
+}
+
+model Product {
+  id                    String   @id @default(cuid())
+  shopifyProductId      String?  @unique
+  sku                   String   @unique
+  name                  String
+  currentStock          Int      @default(0)
+  availabilityStatus    String   @default("in_stock") // in_stock, out_of_stock, low_stock
+  inventoryManaged      Boolean  @default(true)
+  organizationId        String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relations
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lineItems            LineItem[]
+  inventoryAdjustments InventoryAdjustment[]
+  restockRule          ProductRestockRule?
+  failedSyncs          FailedSync[]
+  
+  @@map("products")
+}
+
+// ============================================
+// Cancellation Management Models
+// ============================================
+
+model CancellationRequest {
+  id                String   @id @default(cuid())
+  orderId           String
+  customerId        String
+  organizationId    String
+  reason            String
+  reasonCategory    String   // changed_mind, ordered_by_mistake, found_better_price, etc.
+  initiatedBy       String   // customer, merchant, system
+  refundPreference  String   // full, partial, none
+  notes             String?
+  status            String   @default("pending") // pending, approved, denied, processing, completed
+  riskScore         Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  order            Order                @relation(fields: [orderId], references: [id])
+  customer         Customer             @relation(fields: [customerId], references: [id])
+  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cancellationRecord CancellationRecord?
+  reviewQueueItem  ReviewQueueItem?
+  
+  @@map("cancellation_requests")
+}
+
+model CancellationRecord {
+  id                    String   @id @default(cuid())
+  cancellationRequestId String   @unique
+  orderId               String
+  customerId            String
+  organizationId        String
+  initiatedBy           String
+  reason                String
+  reasonCategory        String
+  refundAmount          Float?
+  refundStatus          String? // pending, completed, failed, none
+  restockDecision       String  // auto_restock, manual_restock, no_restock
+  completedAt           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relations
+  cancellationRequest CancellationRequest  @relation(fields: [cancellationRequestId], references: [id])
+  order               Order                @relation(fields: [orderId], references: [id])
+  customer            Customer             @relation(fields: [customerId], references: [id])
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  refundTransactions  RefundTransaction[]
+  
+  @@map("cancellation_records")
+}
+
+model ReviewQueueItem {
+  id                    String   @id @default(cuid())
+  cancellationRequestId String   @unique
+  orderId               String
+  riskLevel             String   // low, medium, high
+  riskIndicators        Json?
+  customerHistory       Json?
+  reviewStatus          String   @default("pending") // pending, approved, denied, info_requested, escalated
+  reviewedBy            String?
+  reviewNotes           String?
+  reviewedAt            DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relations
+  cancellationRequest CancellationRequest @relation(fields: [cancellationRequestId], references: [id])
+  order               Order               @relation(fields: [orderId], references: [id])
+  
+  @@map("review_queue_items")
+}
+
+// ============================================
+// Refund Management Models
+// ============================================
+
+model RefundTransaction {
+  id                    String   @id @default(cuid())
+  cancellationRecordId  String
+  orderId               String
+  shopifyRefundId       String?
+  refundAmount          Float
+  taxAmount             Float?
+  shippingAmount        Float?
+  status                String   @default("pending") // pending, processing, completed, failed
+  paymentProcessor      String?
+  transactionId         String?
+  retryAttempts         Int      @default(0)
+  lastRetryAt           DateTime?
+  errorMessage          String?
+  errorCode             String?
+  processedAt           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // New fields for Shopify sync
+  shopifyOrderId        String?    // Store Shopify order ID
+  shopifyCustomerId     String?    // Shopify customer ID
+  productNames          String?    // Comma-separated product names
+  syncedFromShopify     Boolean   @default(false)
+  shopifySyncedAt       DateTime? // Last sync timestamp
+  shopifyCreatedAt      DateTime? // When refund was created in Shopify
+  shopifyNote           String?   // Refund note from Shopify
+  refundLineItems       Json?     // Store line items details
+  
+  // Relations
+  cancellationRecord CancellationRecord @relation(fields: [cancellationRecordId], references: [id])
+  order              Order              @relation(fields: [orderId], references: [id])
+  
+  @@map("refund_transactions")
+}
+
+// ============================================
+// Inventory Management Models
+// ============================================
+
+model InventoryAdjustment {
+  id             String   @id @default(cuid())
+  productId      String
+  orderId        String?
+  quantityChange Int      // positive for restocks, negative for removals
+  reason         String   // cancelled_order, damaged_goods, manual_adjustment, etc.
+  adjustedBy     String
+  notes          String?
+  syncedToShopify Boolean @default(false)
+  syncedToUnicommerce Boolean @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relations
+  product Product @relation(fields: [productId], references: [id])
+  order   Order?  @relation(fields: [orderId], references: [id])
+  
+  @@map("inventory_adjustments")
+}
+
+model ProductRestockRule {
+  id                String   @id @default(cuid())
+  productId         String   @unique
+  neverAutoRestock  Boolean  @default(false)
+  reason            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@map("product_restock_rules")
+}
+
+// ============================================
+// Rules Engine Models
+// ============================================
+
+model Rule {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  conditions     Json     // time_window, risk_level, order_status, etc.
+  actions        Json     // auto_approve, manual_review, deny, escalate
+  priority       Int      @default(0)
+  active         Boolean  @default(true)
+  usageCount     Int      @default(0)
+  createdFromTemplateId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relations
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  template     RuleTemplate? @relation(fields: [createdFromTemplateId], references: [id])
+  
+  @@map("rules")
+}
+
+model RuleTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  category    String   // time_based, risk_based, status_based, etc.
+  conditions  Json
+  actions     Json
+  recommended Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  rules Rule[]
+  
+  @@map("rule_templates")
+}
+
+// ============================================
+// Integration & Sync Models
+// ============================================
+
+model Integration {
+  id             String   @id @default(cuid())
+  organizationId String
+  type           String   // shopify, sagepilot, unicommerce, delhivery, bluedart
+  name           String
+  config         Json     // credentials, endpoints, etc.
+  syncStatus     String   @default("inactive") // active, inactive, error
+  lastSyncAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relations
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integrationSyncs   IntegrationSync[]
+  failedSyncs        FailedSync[]
+  orderStatusUpdates OrderStatusUpdate[]
+  
+  @@map("integrations")
+}
+
+model IntegrationSync {
+  id             String   @id @default(cuid())
+  integrationId  String
+  syncType       String   // order_status, inventory, customer_data, refunds
+  status         String   // success, failed, in_progress
+  recordsProcessed Int    @default(0)
+  errorMessage   String?
+  startedAt      DateTime @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relations
+  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  
+  @@map("integration_syncs")
+}
+
+model FailedSync {
+  id             String   @id @default(cuid())
+  integrationId  String
+  productId      String
+  errorMessage   String
+  errorCode      String?
+  retryCount     Int      @default(0)
+  status         String   @default("pending") // pending, retrying, resolved, abandoned
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relations
+  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id])
+  
+  @@map("failed_syncs")
+}
+
+model OrderStatusUpdate {
+  id             String   @id @default(cuid())
+  orderId        String
+  integrationId  String
+  status         String
+  trackingNumber String?
+  courierPartner String?
+  location       String?
+  updateDetails  Json?
+  timestamp      DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relations
+  order       Order       @relation(fields: [orderId], references: [id])
+  integration Integration @relation(fields: [integrationId], references: [id])
+  
+  @@map("order_status_updates")
+}

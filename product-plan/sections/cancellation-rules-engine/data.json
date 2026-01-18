@@ -1,0 +1,550 @@
+{
+  "_meta": {
+    "models": {
+      "rules": "Automation rules that determine how cancellation requests are handled. Each rule defines conditions (time windows, risk levels, order status) and actions (auto-approve, escalate, flag for review, deny). Rules are evaluated in priority order when a cancellation request comes in.",
+      "ruleTemplates": "Pre-built rule templates that merchants can quickly activate and customize. These templates provide common patterns like auto-approving within time windows or flagging high-risk orders.",
+      "reviewQueue": "Orders with cancellation requests that have been flagged for manual review. These require merchant decision-making because they don't match any auto-approval rules or have been flagged as high-risk.",
+      "ruleUsageStats": "Analytics tracking how many times each rule has been triggered. Shows counts for today, this week, and total lifetime usage to help merchants understand rule effectiveness."
+    },
+    "relationships": [
+      "Each Rule can be based on a RuleTemplate (when activated from template)",
+      "Review Queue contains Orders with CancellationRequests that need manual review",
+      "Each Order in the review queue belongs to a Customer",
+      "RuleUsageStats track how many times each Rule has been triggered"
+    ]
+  },
+  "rules": [
+    {
+      "id": "rule-001",
+      "name": "Auto-approve within 15 minutes",
+      "description": "Customer-initiated cancellations within 15 minutes are automatically approved",
+      "status": "active",
+      "priority": 1,
+      "templateId": "template-001",
+      "conditions": {
+        "userType": ["customer"],
+        "timeWindow": "15min",
+        "orderStatus": ["open", "pending"],
+        "fulfillmentStatus": ["unfulfilled"],
+        "paymentStatus": ["authorized", "paid"],
+        "riskLevel": ["low", "medium"]
+      },
+      "action": "auto-approve",
+      "usageStats": {
+        "today": 12,
+        "thisWeek": 87,
+        "total": 1243
+      },
+      "lastModified": "2024-01-15T10:30:00Z",
+      "createdAt": "2024-01-10T09:00:00Z"
+    },
+    {
+      "id": "rule-002",
+      "name": "Flag high-risk orders",
+      "description": "Orders with high fraud risk are held for manual review",
+      "status": "active",
+      "priority": 2,
+      "templateId": "template-002",
+      "conditions": {
+        "userType": ["customer", "merchant", "system"],
+        "riskLevel": ["high"],
+        "orderStatus": ["open", "pending"]
+      },
+      "action": "flag-for-review",
+      "usageStats": {
+        "today": 3,
+        "thisWeek": 18,
+        "total": 156
+      },
+      "lastModified": "2024-01-14T14:20:00Z",
+      "createdAt": "2024-01-12T11:15:00Z"
+    },
+    {
+      "id": "rule-003",
+      "name": "Escalate after 24 hours",
+      "description": "Cancellation requests beyond 24 hours require support team approval",
+      "status": "active",
+      "priority": 3,
+      "templateId": "template-003",
+      "conditions": {
+        "userType": ["customer"],
+        "timeWindow": "24hours",
+        "orderStatus": ["open", "pending"]
+      },
+      "action": "escalate-to-support",
+      "usageStats": {
+        "today": 1,
+        "thisWeek": 5,
+        "total": 42
+      },
+      "lastModified": "2024-01-13T16:45:00Z",
+      "createdAt": "2024-01-11T08:30:00Z"
+    },
+    {
+      "id": "rule-004",
+      "name": "Deny if already fulfilled",
+      "description": "Orders that have already been shipped cannot be canceled",
+      "status": "active",
+      "priority": 4,
+      "templateId": "template-004",
+      "conditions": {
+        "fulfillmentStatus": ["fulfilled"],
+        "orderStatus": ["fulfilled"]
+      },
+      "action": "deny",
+      "usageStats": {
+        "today": 0,
+        "thisWeek": 2,
+        "total": 28
+      },
+      "lastModified": "2024-01-10T10:00:00Z",
+      "createdAt": "2024-01-10T10:00:00Z"
+    },
+    {
+      "id": "rule-005",
+      "name": "Quick refund within 1 hour",
+      "description": "Customer cancellations within 1 hour get fast-tracked refund processing",
+      "status": "active",
+      "priority": 5,
+      "conditions": {
+        "userType": ["customer"],
+        "timeWindow": "1hour",
+        "orderStatus": ["open", "pending"],
+        "paymentStatus": ["paid"]
+      },
+      "action": "auto-approve",
+      "usageStats": {
+        "today": 8,
+        "thisWeek": 54,
+        "total": 892
+      },
+      "lastModified": "2024-01-12T09:15:00Z",
+      "createdAt": "2024-01-08T14:20:00Z"
+    },
+    {
+      "id": "rule-006",
+      "name": "Merchant-initiated auto-approve",
+      "description": "All merchant-initiated cancellations are automatically approved",
+      "status": "active",
+      "priority": 6,
+      "conditions": {
+        "userType": ["merchant"],
+        "orderStatus": ["open", "pending"]
+      },
+      "action": "auto-approve",
+      "usageStats": {
+        "today": 5,
+        "thisWeek": 32,
+        "total": 445
+      },
+      "lastModified": "2024-01-11T11:00:00Z",
+      "createdAt": "2024-01-09T10:30:00Z"
+    },
+    {
+      "id": "rule-007",
+      "name": "Flag orders over $500",
+      "description": "High-value orders require manual review before cancellation",
+      "status": "inactive",
+      "priority": 7,
+      "conditions": {
+        "orderTotal": {
+          "operator": "greaterThan",
+          "value": 500
+        },
+        "orderStatus": ["open", "pending"]
+      },
+      "action": "flag-for-review",
+      "usageStats": {
+        "today": 0,
+        "thisWeek": 0,
+        "total": 0
+      },
+      "lastModified": "2024-01-15T08:00:00Z",
+      "createdAt": "2024-01-14T15:45:00Z"
+    },
+    {
+      "id": "rule-008",
+      "name": "System-initiated fraud check",
+      "description": "System-detected suspicious patterns trigger manual review",
+      "status": "active",
+      "priority": 8,
+      "conditions": {
+        "userType": ["system"],
+        "riskLevel": ["medium", "high"],
+        "orderStatus": ["open", "pending"]
+      },
+      "action": "flag-for-review",
+      "usageStats": {
+        "today": 2,
+        "thisWeek": 11,
+        "total": 78
+      },
+      "lastModified": "2024-01-13T13:30:00Z",
+      "createdAt": "2024-01-12T09:00:00Z"
+    }
+  ],
+  "ruleTemplates": [
+    {
+      "id": "template-001",
+      "name": "Auto-approve within 15 min",
+      "description": "Instantly approve customer cancellations within 15 minutes of order placement",
+      "category": "time-window",
+      "conditions": {
+        "userType": ["customer"],
+        "timeWindow": "15min",
+        "orderStatus": ["open", "pending"]
+      },
+      "action": "auto-approve",
+      "icon": "clock"
+    },
+    {
+      "id": "template-002",
+      "name": "Flag high-risk orders",
+      "description": "Hold orders with high fraud risk for manual review",
+      "category": "fraud-detection",
+      "conditions": {
+        "riskLevel": ["high"]
+      },
+      "action": "flag-for-review",
+      "icon": "shield-alert"
+    },
+    {
+      "id": "template-003",
+      "name": "Escalate after 24 hours",
+      "description": "Route cancellation requests beyond 24 hours to support team",
+      "category": "time-window",
+      "conditions": {
+        "userType": ["customer"],
+        "timeWindow": "24hours"
+      },
+      "action": "escalate-to-support",
+      "icon": "arrow-up"
+    },
+    {
+      "id": "template-004",
+      "name": "Deny if already fulfilled",
+      "description": "Automatically deny cancellations for orders that have shipped",
+      "category": "fulfillment",
+      "conditions": {
+        "fulfillmentStatus": ["fulfilled"]
+      },
+      "action": "deny",
+      "icon": "x-circle"
+    },
+    {
+      "id": "template-005",
+      "name": "Quick refund within 1 hour",
+      "description": "Fast-track refund processing for cancellations within the first hour",
+      "category": "time-window",
+      "conditions": {
+        "userType": ["customer"],
+        "timeWindow": "1hour",
+        "paymentStatus": ["paid"]
+      },
+      "action": "auto-approve",
+      "icon": "zap"
+    }
+  ],
+  "reviewQueue": [
+    {
+      "id": "review-001",
+      "orderId": "order-1001",
+      "orderNumber": "#1001",
+      "customer": {
+        "id": "cust-001",
+        "name": "Sarah Johnson",
+        "email": "sarah.johnson@email.com"
+      },
+      "cancellationRequest": {
+        "id": "req-001",
+        "initiatedBy": "customer",
+        "reason": "customer",
+        "reasonDescription": "Changed my mind",
+        "requestedAt": "2024-01-15T14:30:00Z",
+        "timeElapsed": "2h 15m"
+      },
+      "order": {
+        "id": "order-1001",
+        "total": 89.99,
+        "status": "open",
+        "fulfillmentStatus": "unfulfilled",
+        "paymentStatus": "paid",
+        "createdAt": "2024-01-15T12:15:00Z"
+      },
+      "riskLevel": "high",
+      "flaggedBy": "rule-002",
+      "flaggedReason": "High fraud risk detected",
+      "lineItems": [
+        {
+          "id": "item-001",
+          "productId": "prod-123",
+          "sku": "TSHIRT-BLUE-M",
+          "title": "Classic Blue T-Shirt",
+          "quantity": 2,
+          "price": 29.99
+        },
+        {
+          "id": "item-002",
+          "productId": "prod-456",
+          "sku": "JEANS-DARK-32",
+          "title": "Dark Wash Jeans",
+          "quantity": 1,
+          "price": 59.99
+        }
+      ],
+      "customerHistory": {
+        "totalOrders": 3,
+        "totalCancellations": 1,
+        "totalSpent": 245.97,
+        "riskScore": 0.75
+      },
+      "notes": []
+    },
+    {
+      "id": "review-002",
+      "orderId": "order-1002",
+      "orderNumber": "#1002",
+      "customer": {
+        "id": "cust-002",
+        "name": "Michael Chen",
+        "email": "mchen@example.com"
+      },
+      "cancellationRequest": {
+        "id": "req-002",
+        "initiatedBy": "customer",
+        "reason": "inventory",
+        "reasonDescription": "Item out of stock",
+        "requestedAt": "2024-01-15T16:45:00Z",
+        "timeElapsed": "45m"
+      },
+      "order": {
+        "id": "order-1002",
+        "total": 149.50,
+        "status": "pending",
+        "fulfillmentStatus": "unfulfilled",
+        "paymentStatus": "authorized",
+        "createdAt": "2024-01-15T15:00:00Z"
+      },
+      "riskLevel": "medium",
+      "flaggedBy": "rule-003",
+      "flaggedReason": "Request beyond 24-hour window",
+      "lineItems": [
+        {
+          "id": "item-003",
+          "productId": "prod-789",
+          "sku": "JACKET-WINTER-L",
+          "title": "Winter Jacket",
+          "quantity": 1,
+          "price": 149.50
+        }
+      ],
+      "customerHistory": {
+        "totalOrders": 12,
+        "totalCancellations": 0,
+        "totalSpent": 1845.50,
+        "riskScore": 0.15
+      },
+      "notes": [
+        {
+          "id": "note-001",
+          "author": "Support Team",
+          "content": "Customer contacted support about stock issue",
+          "createdAt": "2024-01-15T16:30:00Z"
+        }
+      ]
+    },
+    {
+      "id": "review-003",
+      "orderId": "order-1003",
+      "orderNumber": "#1003",
+      "customer": {
+        "id": "cust-003",
+        "name": "Emily Rodriguez",
+        "email": "emily.r@email.com"
+      },
+      "cancellationRequest": {
+        "id": "req-003",
+        "initiatedBy": "system",
+        "reason": "fraud",
+        "reasonDescription": "Suspicious payment pattern detected",
+        "requestedAt": "2024-01-15T17:00:00Z",
+        "timeElapsed": "30m"
+      },
+      "order": {
+        "id": "order-1003",
+        "total": 299.99,
+        "status": "open",
+        "fulfillmentStatus": "unfulfilled",
+        "paymentStatus": "paid",
+        "createdAt": "2024-01-15T16:30:00Z"
+      },
+      "riskLevel": "high",
+      "flaggedBy": "rule-008",
+      "flaggedReason": "System fraud detection triggered",
+      "lineItems": [
+        {
+          "id": "item-004",
+          "productId": "prod-321",
+          "sku": "WATCH-LUXURY-GOLD",
+          "title": "Luxury Gold Watch",
+          "quantity": 1,
+          "price": 299.99
+        }
+      ],
+      "customerHistory": {
+        "totalOrders": 1,
+        "totalCancellations": 0,
+        "totalSpent": 299.99,
+        "riskScore": 0.92
+      },
+      "notes": []
+    },
+    {
+      "id": "review-004",
+      "orderId": "order-1004",
+      "orderNumber": "#1004",
+      "customer": {
+        "id": "cust-004",
+        "name": "David Park",
+        "email": "david.park@email.com"
+      },
+      "cancellationRequest": {
+        "id": "req-004",
+        "initiatedBy": "customer",
+        "reason": "other",
+        "reasonDescription": "Found better price elsewhere",
+        "requestedAt": "2024-01-15T10:20:00Z",
+        "timeElapsed": "7h 10m"
+      },
+      "order": {
+        "id": "order-1004",
+        "total": 45.00,
+        "status": "open",
+        "fulfillmentStatus": "unfulfilled",
+        "paymentStatus": "paid",
+        "createdAt": "2024-01-14T20:00:00Z"
+      },
+      "riskLevel": "low",
+      "flaggedBy": "rule-003",
+      "flaggedReason": "Request beyond 24-hour window",
+      "lineItems": [
+        {
+          "id": "item-005",
+          "productId": "prod-654",
+          "sku": "MUG-CERAMIC-WHITE",
+          "title": "Ceramic Coffee Mug",
+          "quantity": 3,
+          "price": 15.00
+        }
+      ],
+      "customerHistory": {
+        "totalOrders": 8,
+        "totalCancellations": 2,
+        "totalSpent": 420.00,
+        "riskScore": 0.35
+      },
+      "notes": []
+    },
+    {
+      "id": "review-005",
+      "orderId": "order-1005",
+      "orderNumber": "#1005",
+      "customer": {
+        "id": "cust-005",
+        "name": "Lisa Thompson",
+        "email": "lisa.t@email.com"
+      },
+      "cancellationRequest": {
+        "id": "req-005",
+        "initiatedBy": "customer",
+        "reason": "customer",
+        "reasonDescription": "Ordered wrong size",
+        "requestedAt": "2024-01-15T18:15:00Z",
+        "timeElapsed": "15m"
+      },
+      "order": {
+        "id": "order-1005",
+        "total": 125.00,
+        "status": "open",
+        "fulfillmentStatus": "unfulfilled",
+        "paymentStatus": "paid",
+        "createdAt": "2024-01-15T18:00:00Z"
+      },
+      "riskLevel": "medium",
+      "flaggedBy": "rule-002",
+      "flaggedReason": "Medium risk score, requires review",
+      "lineItems": [
+        {
+          "id": "item-006",
+          "productId": "prod-987",
+          "sku": "DRESS-SUMMER-M",
+          "title": "Summer Floral Dress",
+          "quantity": 1,
+          "price": 125.00
+        }
+      ],
+      "customerHistory": {
+        "totalOrders": 5,
+        "totalCancellations": 1,
+        "totalSpent": 650.00,
+        "riskScore": 0.45
+      },
+      "notes": []
+    },
+    {
+      "id": "review-006",
+      "orderId": "order-1006",
+      "orderNumber": "#1006",
+      "customer": {
+        "id": "cust-006",
+        "name": "James Wilson",
+        "email": "j.wilson@email.com"
+      },
+      "cancellationRequest": {
+        "id": "req-006",
+        "initiatedBy": "merchant",
+        "reason": "inventory",
+        "reasonDescription": "Product damaged in warehouse",
+        "requestedAt": "2024-01-15T19:00:00Z",
+        "timeElapsed": "5m"
+      },
+      "order": {
+        "id": "order-1006",
+        "total": 75.50,
+        "status": "open",
+        "fulfillmentStatus": "unfulfilled",
+        "paymentStatus": "paid",
+        "createdAt": "2024-01-15T18:55:00Z"
+      },
+      "riskLevel": "low",
+      "flaggedBy": "rule-002",
+      "flaggedReason": "Manual review requested by merchant",
+      "lineItems": [
+        {
+          "id": "item-007",
+          "productId": "prod-147",
+          "sku": "SHOES-SNEAKERS-10",
+          "title": "Running Sneakers",
+          "quantity": 1,
+          "price": 75.50
+        }
+      ],
+      "customerHistory": {
+        "totalOrders": 15,
+        "totalCancellations": 0,
+        "totalSpent": 2150.75,
+        "riskScore": 0.10
+      },
+      "notes": [
+        {
+          "id": "note-002",
+          "author": "Warehouse Team",
+          "content": "Item damaged during quality check, cannot fulfill",
+          "createdAt": "2024-01-15T18:58:00Z"
+        }
+      ]
+    }
+  ]
+}
+
+

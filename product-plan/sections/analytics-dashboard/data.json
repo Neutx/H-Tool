@@ -1,0 +1,895 @@
+{
+  "_meta": {
+    "models": {
+      "cancellationRecords": "A permanent audit trail record of a completed or failed cancellation. Contains all cancellation details including who initiated it, when, the reason, refund amount, refund status, restock decision, and completion timestamp. This creates the 'single source of truth' for all cancellations.",
+      "metrics": "Aggregated key performance indicators (KPIs) for different time periods including cancellation rate, refund success rate, total cancellations, and comparison data for trend analysis.",
+      "activityLogs": "Chronological log of all events in the system including cancellation requests, approvals, rejections, refunds, system actions, and manual actions. Provides complete audit trail.",
+      "fraudAlerts": "Rejected cancellation requests that have been flagged as potential fraud patterns. Includes order details, risk assessment, and rejection reasons.",
+      "timelineEvents": "Step-by-step events for each cancellation record showing the complete process from request initiation through completion. Each event represents a specific action or state change in the cancellation workflow."
+    },
+    "relationships": [
+      "CancellationRecord references one Order and one Customer",
+      "CancellationRecord can have one RefundTransaction",
+      "CancellationRecord has many TimelineEvents showing the complete process",
+      "ActivityLogs track events across all CancellationRecords",
+      "FraudAlerts reference CancellationRecords that were rejected",
+      "Metrics aggregate data from all CancellationRecords for a given time period"
+    ]
+  },
+  "metrics": {
+    "currentPeriod": {
+      "range": "L7D",
+      "startDate": "2024-01-08T00:00:00Z",
+      "endDate": "2024-01-15T23:59:59Z",
+      "totalCancellations": 47,
+      "cancellationRate": 3.2,
+      "totalOrders": 1468,
+      "refundSuccessRate": 94.3,
+      "totalRefunded": 12847.65,
+      "averageRefundAmount": 273.35,
+      "initiatorSplit": {
+        "customer": 68.1,
+        "merchant": 23.4,
+        "system": 8.5
+      },
+      "reasonBreakdown": {
+        "customer": 25,
+        "inventory": 12,
+        "fraud": 3,
+        "paymentDeclined": 4,
+        "other": 3
+      },
+      "statusBreakdown": {
+        "completed": 42,
+        "failed": 3,
+        "pending": 2
+      },
+      "fraudRiskPercentage": 6.4,
+      "averageTimeToCancel": 2.3
+    },
+    "comparisonPeriod": {
+      "range": "L7D",
+      "startDate": "2024-01-01T00:00:00Z",
+      "endDate": "2024-01-08T23:59:59Z",
+      "totalCancellations": 52,
+      "cancellationRate": 3.5,
+      "totalOrders": 1485,
+      "refundSuccessRate": 92.1,
+      "totalRefunded": 14230.50,
+      "averageRefundAmount": 273.66,
+      "initiatorSplit": {
+        "customer": 65.4,
+        "merchant": 26.9,
+        "system": 7.7
+      },
+      "reasonBreakdown": {
+        "customer": 28,
+        "inventory": 14,
+        "fraud": 2,
+        "paymentDeclined": 5,
+        "other": 3
+      },
+      "statusBreakdown": {
+        "completed": 46,
+        "failed": 4,
+        "pending": 2
+      },
+      "fraudRiskPercentage": 3.8,
+      "averageTimeToCancel": 2.1
+    },
+    "trends": {
+      "cancellationRateChange": -0.3,
+      "refundSuccessRateChange": 2.2,
+      "totalCancellationsChange": -5,
+      "fraudRiskChange": 2.6
+    }
+  },
+  "cancellationRecords": [
+    {
+      "id": "cancel-rec-001",
+      "orderId": "ord-2024-1158",
+      "orderNumber": "#1158",
+      "customerId": "cust-4782",
+      "customerName": "Priya Sharma",
+      "customerEmail": "priya.sharma@email.com",
+      "customerPhone": "+91 98765 43210",
+      "initiatedBy": "customer",
+      "initiatedById": "cust-4782",
+      "initiatedTimestamp": "2024-01-15T10:23:00Z",
+      "reason": "customer",
+      "reasonDescription": "Changed mind - found better deal elsewhere",
+      "refundAmount": 2499.00,
+      "refundStatus": "completed",
+      "refundTransactionId": "txn-shop-9847563",
+      "restockDecision": "restocked",
+      "customerNotified": true,
+      "completionTimestamp": "2024-01-15T10:25:12Z",
+      "status": "completed",
+      "fraudRiskLevel": "low",
+      "timeWindow": "15min",
+      "processingTime": 132,
+      "orderCreatedAt": "2024-01-15T10:08:00Z",
+      "timeToCancel": 15
+    },
+    {
+      "id": "cancel-rec-002",
+      "orderId": "ord-2024-1123",
+      "orderNumber": "#1123",
+      "customerId": "cust-4521",
+      "customerName": "Amit Patel",
+      "customerEmail": "amit.patel@email.com",
+      "customerPhone": "+91 91234 56789",
+      "initiatedBy": "merchant",
+      "initiatedById": "merchant-user-001",
+      "initiatedTimestamp": "2024-01-14T16:45:00Z",
+      "reason": "inventory",
+      "reasonDescription": "Product out of stock - cannot fulfill",
+      "refundAmount": 1899.00,
+      "refundStatus": "completed",
+      "refundTransactionId": "txn-shop-9847124",
+      "restockDecision": "not_applicable",
+      "customerNotified": true,
+      "completionTimestamp": "2024-01-14T16:47:30Z",
+      "status": "completed",
+      "fraudRiskLevel": "low",
+      "timeWindow": "manual",
+      "processingTime": 150,
+      "orderCreatedAt": "2024-01-14T14:20:00Z",
+      "timeToCancel": 145
+    },
+    {
+      "id": "cancel-rec-003",
+      "orderId": "ord-2024-1098",
+      "orderNumber": "#1098",
+      "customerId": "cust-4125",
+      "customerName": "Sneha Reddy",
+      "customerEmail": "sneha.reddy@email.com",
+      "customerPhone": "+91 92345 67890",
+      "initiatedBy": "customer",
+      "initiatedById": "cust-4125",
+      "initiatedTimestamp": "2024-01-13T09:15:00Z",
+      "reason": "customer",
+      "reasonDescription": "Ordered wrong size",
+      "refundAmount": 3299.00,
+      "refundStatus": "completed",
+      "refundTransactionId": "txn-shop-9846892",
+      "restockDecision": "restocked",
+      "customerNotified": true,
+      "completionTimestamp": "2024-01-13T09:17:45Z",
+      "status": "completed",
+      "fraudRiskLevel": "low",
+      "timeWindow": "15min",
+      "processingTime": 165,
+      "orderCreatedAt": "2024-01-13T09:02:00Z",
+      "timeToCancel": 13
+    },
+    {
+      "id": "cancel-rec-004",
+      "orderId": "ord-2024-1087",
+      "orderNumber": "#1087",
+      "customerId": "cust-3987",
+      "customerName": "Vikram Singh",
+      "customerEmail": "vikram.singh@email.com",
+      "customerPhone": "+91 93456 78901",
+      "initiatedBy": "system",
+      "initiatedById": "system-auto",
+      "initiatedTimestamp": "2024-01-12T14:30:00Z",
+      "reason": "paymentDeclined",
+      "reasonDescription": "Payment authorization failed - automatic cancellation",
+      "refundAmount": 0.00,
+      "refundStatus": "not_applicable",
+      "refundTransactionId": null,
+      "restockDecision": "not_applicable",
+      "customerNotified": true,
+      "completionTimestamp": "2024-01-12T14:30:15Z",
+      "status": "completed",
+      "fraudRiskLevel": "low",
+      "timeWindow": "system",
+      "processingTime": 15,
+      "orderCreatedAt": "2024-01-12T14:25:00Z",
+      "timeToCancel": 5
+    },
+    {
+      "id": "cancel-rec-005",
+      "orderId": "ord-2024-1056",
+      "orderNumber": "#1056",
+      "customerId": "cust-3654",
+      "customerName": "Anjali Mehta",
+      "customerEmail": "anjali.mehta@email.com",
+      "customerPhone": "+91 94567 89012",
+      "initiatedBy": "customer",
+      "initiatedById": "cust-3654",
+      "initiatedTimestamp": "2024-01-11T11:20:00Z",
+      "reason": "customer",
+      "reasonDescription": "No longer needed",
+      "refundAmount": 1599.00,
+      "refundStatus": "failed",
+      "refundTransactionId": "txn-shop-9845234",
+      "restockDecision": "restocked",
+      "customerNotified": true,
+      "completionTimestamp": "2024-01-11T11:25:00Z",
+      "status": "failed",
+      "fraudRiskLevel": "low",
+      "timeWindow": "1hour",
+      "processingTime": 300,
+      "orderCreatedAt": "2024-01-11T10:45:00Z",
+      "timeToCancel": 35,
+      "failureReason": "Payment processor timeout - requires manual retry"
+    },
+    {
+      "id": "cancel-rec-006",
+      "orderId": "ord-2024-1023",
+      "orderNumber": "#1023",
+      "customerId": "cust-3321",
+      "customerName": "Rahul Verma",
+      "customerEmail": "rahul.verma@email.com",
+      "customerPhone": "+91 95678 90123",
+      "initiatedBy": "customer",
+      "initiatedById": "cust-3321",
+      "initiatedTimestamp": "2024-01-10T08:30:00Z",
+      "reason": "customer",
+      "reasonDescription": "Duplicate order",
+      "refundAmount": 2799.00,
+      "refundStatus": "completed",
+      "refundTransactionId": "txn-shop-9844567",
+      "restockDecision": "restocked",
+      "customerNotified": true,
+      "completionTimestamp": "2024-01-10T08:32:20Z",
+      "status": "completed",
+      "fraudRiskLevel": "low",
+      "timeWindow": "15min",
+      "processingTime": 140,
+      "orderCreatedAt": "2024-01-10T08:18:00Z",
+      "timeToCancel": 12
+    },
+    {
+      "id": "cancel-rec-007",
+      "orderId": "ord-2024-0998",
+      "orderNumber": "#0998",
+      "customerId": "cust-2987",
+      "customerName": "Kavita Nair",
+      "customerEmail": "kavita.nair@email.com",
+      "customerPhone": "+91 96789 01234",
+      "initiatedBy": "merchant",
+      "initiatedById": "merchant-user-002",
+      "initiatedTimestamp": "2024-01-09T15:10:00Z",
+      "reason": "fraud",
+      "reasonDescription": "High-risk order flagged by fraud detection - suspicious payment pattern",
+      "refundAmount": 0.00,
+      "refundStatus": "rejected",
+      "refundTransactionId": null,
+      "restockDecision": "not_applicable",
+      "customerNotified": false,
+      "completionTimestamp": "2024-01-09T15:12:00Z",
+      "status": "rejected",
+      "fraudRiskLevel": "high",
+      "timeWindow": "manual",
+      "processingTime": 120,
+      "orderCreatedAt": "2024-01-09T14:50:00Z",
+      "timeToCancel": 20
+    },
+    {
+      "id": "cancel-rec-008",
+      "orderId": "ord-2024-0976",
+      "orderNumber": "#0976",
+      "customerId": "cust-2654",
+      "customerName": "Manish Gupta",
+      "customerEmail": "manish.gupta@email.com",
+      "customerPhone": "+91 97890 12345",
+      "initiatedBy": "customer",
+      "initiatedById": "cust-2654",
+      "initiatedTimestamp": "2024-01-08T13:45:00Z",
+      "reason": "inventory",
+      "reasonDescription": "Item delayed - customer requested cancellation",
+      "refundAmount": 2199.00,
+      "refundStatus": "completed",
+      "refundTransactionId": "txn-shop-9843123",
+      "restockDecision": "restocked",
+      "customerNotified": true,
+      "completionTimestamp": "2024-01-08T13:47:10Z",
+      "status": "completed",
+      "fraudRiskLevel": "low",
+      "timeWindow": "1hour",
+      "processingTime": 130,
+      "orderCreatedAt": "2024-01-08T12:30:00Z",
+      "timeToCancel": 75
+    },
+    {
+      "id": "cancel-rec-009",
+      "orderId": "ord-2024-0954",
+      "orderNumber": "#0954",
+      "customerId": "cust-2321",
+      "customerName": "Deepa Joshi",
+      "customerEmail": "deepa.joshi@email.com",
+      "customerPhone": "+91 98901 23456",
+      "initiatedBy": "customer",
+      "initiatedById": "cust-2321",
+      "initiatedTimestamp": "2024-01-07T10:00:00Z",
+      "reason": "other",
+      "reasonDescription": "Shipping address incorrect - cannot update",
+      "refundAmount": 3499.00,
+      "refundStatus": "pending",
+      "refundTransactionId": "txn-shop-9842789",
+      "restockDecision": "pending",
+      "customerNotified": true,
+      "completionTimestamp": null,
+      "status": "pending",
+      "fraudRiskLevel": "medium",
+      "timeWindow": "24hour",
+      "processingTime": null,
+      "orderCreatedAt": "2024-01-06T09:15:00Z",
+      "timeToCancel": 1065
+    },
+    {
+      "id": "cancel-rec-010",
+      "orderId": "ord-2024-0932",
+      "orderNumber": "#0932",
+      "customerId": "cust-1987",
+      "customerName": "Arjun Desai",
+      "customerEmail": "arjun.desai@email.com",
+      "customerPhone": "+91 99012 34567",
+      "initiatedBy": "system",
+      "initiatedById": "system-auto",
+      "initiatedTimestamp": "2024-01-06T16:20:00Z",
+      "reason": "fraud",
+      "reasonDescription": "Automated fraud detection - multiple failed payment attempts",
+      "refundAmount": 0.00,
+      "refundStatus": "rejected",
+      "refundTransactionId": null,
+      "restockDecision": "not_applicable",
+      "customerNotified": false,
+      "completionTimestamp": "2024-01-06T16:20:30Z",
+      "status": "rejected",
+      "fraudRiskLevel": "high",
+      "timeWindow": "system",
+      "processingTime": 30,
+      "orderCreatedAt": "2024-01-06T16:15:00Z",
+      "timeToCancel": 5
+    }
+  ],
+  "timelineEvents": [
+    {
+      "cancellationRecordId": "cancel-rec-001",
+      "events": [
+        {
+          "id": "timeline-001-1",
+          "timestamp": "2024-01-15T10:23:00Z",
+          "eventType": "request_initiated",
+          "description": "Customer initiated cancellation request",
+          "actor": "Priya Sharma",
+          "actorType": "customer",
+          "details": {
+            "reason": "Changed mind - found better deal elsewhere",
+            "orderNumber": "#1158"
+          }
+        },
+        {
+          "id": "timeline-001-2",
+          "timestamp": "2024-01-15T10:23:05Z",
+          "eventType": "validation_started",
+          "description": "System started validation checks",
+          "actor": "System",
+          "actorType": "system",
+          "details": {
+            "checks": ["order_exists", "order_status", "fulfillment_status", "payment_status", "time_window"]
+          }
+        },
+        {
+          "id": "timeline-001-3",
+          "timestamp": "2024-01-15T10:23:08Z",
+          "eventType": "validation_passed",
+          "description": "All validation checks passed",
+          "actor": "System",
+          "actorType": "system",
+          "details": {
+            "timeWindow": "15min",
+            "orderStatus": "open",
+            "fulfillmentStatus": "unfulfilled"
+          }
+        },
+        {
+          "id": "timeline-001-4",
+          "timestamp": "2024-01-15T10:23:10Z",
+          "eventType": "auto_approved",
+          "description": "Cancellation auto-approved (within 15 min window)",
+          "actor": "System",
+          "actorType": "system",
+          "details": {
+            "rule": "15min_auto_approve"
+          }
+        },
+        {
+          "id": "timeline-001-5",
+          "timestamp": "2024-01-15T10:23:45Z",
+          "eventType": "refund_initiated",
+          "description": "Refund processing started",
+          "actor": "System",
+          "actorType": "system",
+          "details": {
+            "amount": 2499.00,
+            "paymentProcessor": "Shopify Payments"
+          }
+        },
+        {
+          "id": "timeline-001-6",
+          "timestamp": "2024-01-15T10:24:12Z",
+          "eventType": "refund_completed",
+          "description": "Refund successfully processed",
+          "actor": "System",
+          "actorType": "system",
+          "details": {
+            "transactionId": "txn-shop-9847563",
+            "processingTime": 27
+          }
+        },
+        {
+          "id": "timeline-001-7",
+          "timestamp": "2024-01-15T10:24:30Z",
+          "eventType": "inventory_restocked",
+          "description": "Items restocked to inventory",
+          "actor": "System",
+          "actorType": "system",
+          "details": {
+            "itemsRestocked": 2,
+            "products": ["WM-HOOD-BLK-L", "WM-PANT-BLK-32"]
+          }
+        },
+        {
+          "id": "timeline-001-8",
+          "timestamp": "2024-01-15T10:24:45Z",
+          "eventType": "customer_notified",
+          "description": "Cancellation confirmation email sent",
+          "actor": "System",
+          "actorType": "system",
+          "details": {
+            "notificationType": "email",
+            "recipient": "priya.sharma@email.com"
+          }
+        },
+        {
+          "id": "timeline-001-9",
+          "timestamp": "2024-01-15T10:25:12Z",
+          "eventType": "cancellation_completed",
+          "description": "Cancellation process completed successfully",
+          "actor": "System",
+          "actorType": "system",
+          "details": {
+            "totalProcessingTime": 132
+          }
+        }
+      ]
+    },
+    {
+      "cancellationRecordId": "cancel-rec-007",
+      "events": [
+        {
+          "id": "timeline-007-1",
+          "timestamp": "2024-01-09T15:10:00Z",
+          "eventType": "request_initiated",
+          "description": "Merchant initiated cancellation review",
+          "actor": "Support Team",
+          "actorType": "merchant",
+          "details": {
+            "reason": "High-risk order flagged by fraud detection",
+            "orderNumber": "#0998"
+          }
+        },
+        {
+          "id": "timeline-007-2",
+          "timestamp": "2024-01-09T15:10:15Z",
+          "eventType": "fraud_check",
+          "description": "Fraud risk assessment: HIGH",
+          "actor": "System",
+          "actorType": "system",
+          "details": {
+            "riskScore": 8.5,
+            "riskFactors": ["suspicious_payment_pattern", "new_customer", "high_value_order"]
+          }
+        },
+        {
+          "id": "timeline-007-3",
+          "timestamp": "2024-01-09T15:11:00Z",
+          "eventType": "manual_review",
+          "description": "Sent to manual review queue",
+          "actor": "System",
+          "actorType": "system",
+          "details": {
+            "queueId": "review-queue-045",
+            "priority": "high"
+          }
+        },
+        {
+          "id": "timeline-007-4",
+          "timestamp": "2024-01-09T15:11:45Z",
+          "eventType": "reviewed",
+          "description": "Merchant reviewed and rejected cancellation",
+          "actor": "Merchant Admin",
+          "actorType": "merchant",
+          "details": {
+            "decision": "reject",
+            "notes": "Confirmed fraud pattern - order blocked"
+          }
+        },
+        {
+          "id": "timeline-007-5",
+          "timestamp": "2024-01-09T15:12:00Z",
+          "eventType": "cancellation_rejected",
+          "description": "Cancellation request rejected - fraud alert",
+          "actor": "System",
+          "actorType": "system",
+          "details": {
+            "reason": "fraud_detected"
+          }
+        }
+      ]
+    }
+  ],
+  "activityLogs": [
+    {
+      "id": "activity-001",
+      "timestamp": "2024-01-15T10:25:12Z",
+      "eventType": "cancellation_completed",
+      "description": "Cancellation #1158 completed successfully",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-001",
+      "orderNumber": "#1158",
+      "customerName": "Priya Sharma",
+      "details": {
+        "refundAmount": 2499.00,
+        "processingTime": 132
+      }
+    },
+    {
+      "id": "activity-002",
+      "timestamp": "2024-01-15T10:23:00Z",
+      "eventType": "cancellation_requested",
+      "description": "Customer requested cancellation for order #1158",
+      "actor": "Priya Sharma",
+      "actorType": "customer",
+      "cancellationRecordId": "cancel-rec-001",
+      "orderNumber": "#1158",
+      "customerName": "Priya Sharma",
+      "details": {
+        "reason": "customer"
+      }
+    },
+    {
+      "id": "activity-003",
+      "timestamp": "2024-01-14T16:47:30Z",
+      "eventType": "cancellation_completed",
+      "description": "Cancellation #1123 completed by merchant",
+      "actor": "Merchant User",
+      "actorType": "merchant",
+      "cancellationRecordId": "cancel-rec-002",
+      "orderNumber": "#1123",
+      "customerName": "Amit Patel",
+      "details": {
+        "refundAmount": 1899.00,
+        "reason": "inventory"
+      }
+    },
+    {
+      "id": "activity-004",
+      "timestamp": "2024-01-14T16:45:00Z",
+      "eventType": "cancellation_requested",
+      "description": "Merchant initiated cancellation for order #1123",
+      "actor": "Merchant User",
+      "actorType": "merchant",
+      "cancellationRecordId": "cancel-rec-002",
+      "orderNumber": "#1123",
+      "customerName": "Amit Patel",
+      "details": {
+        "reason": "inventory"
+      }
+    },
+    {
+      "id": "activity-005",
+      "timestamp": "2024-01-13T09:17:45Z",
+      "eventType": "refund_completed",
+      "description": "Refund processed for order #1098",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-003",
+      "orderNumber": "#1098",
+      "customerName": "Sneha Reddy",
+      "details": {
+        "refundAmount": 3299.00,
+        "transactionId": "txn-shop-9846892"
+      }
+    },
+    {
+      "id": "activity-006",
+      "timestamp": "2024-01-13T09:15:00Z",
+      "eventType": "cancellation_requested",
+      "description": "Customer requested cancellation for order #1098",
+      "actor": "Sneha Reddy",
+      "actorType": "customer",
+      "cancellationRecordId": "cancel-rec-003",
+      "orderNumber": "#1098",
+      "customerName": "Sneha Reddy",
+      "details": {
+        "reason": "customer"
+      }
+    },
+    {
+      "id": "activity-007",
+      "timestamp": "2024-01-12T14:30:15Z",
+      "eventType": "cancellation_completed",
+      "description": "System auto-cancelled order #1087 (payment declined)",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-004",
+      "orderNumber": "#1087",
+      "customerName": "Vikram Singh",
+      "details": {
+        "reason": "paymentDeclined"
+      }
+    },
+    {
+      "id": "activity-008",
+      "timestamp": "2024-01-11T11:25:00Z",
+      "eventType": "refund_failed",
+      "description": "Refund failed for order #1056",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-005",
+      "orderNumber": "#1056",
+      "customerName": "Anjali Mehta",
+      "details": {
+        "refundAmount": 1599.00,
+        "failureReason": "Payment processor timeout - requires manual retry"
+      }
+    },
+    {
+      "id": "activity-009",
+      "timestamp": "2024-01-11T11:20:00Z",
+      "eventType": "cancellation_requested",
+      "description": "Customer requested cancellation for order #1056",
+      "actor": "Anjali Mehta",
+      "actorType": "customer",
+      "cancellationRecordId": "cancel-rec-005",
+      "orderNumber": "#1056",
+      "customerName": "Anjali Mehta",
+      "details": {
+        "reason": "customer"
+      }
+    },
+    {
+      "id": "activity-010",
+      "timestamp": "2024-01-10T08:32:20Z",
+      "eventType": "cancellation_completed",
+      "description": "Cancellation #1023 completed successfully",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-006",
+      "orderNumber": "#1023",
+      "customerName": "Rahul Verma",
+      "details": {
+        "refundAmount": 2799.00,
+        "processingTime": 140
+      }
+    },
+    {
+      "id": "activity-011",
+      "timestamp": "2024-01-09T15:12:00Z",
+      "eventType": "cancellation_rejected",
+      "description": "Cancellation #0998 rejected - fraud detected",
+      "actor": "Merchant Admin",
+      "actorType": "merchant",
+      "cancellationRecordId": "cancel-rec-007",
+      "orderNumber": "#0998",
+      "customerName": "Kavita Nair",
+      "details": {
+        "reason": "fraud",
+        "riskLevel": "high"
+      }
+    },
+    {
+      "id": "activity-012",
+      "timestamp": "2024-01-09T15:10:00Z",
+      "eventType": "fraud_alert",
+      "description": "High-risk order flagged for review",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-007",
+      "orderNumber": "#0998",
+      "customerName": "Kavita Nair",
+      "details": {
+        "riskScore": 8.5,
+        "riskLevel": "high"
+      }
+    },
+    {
+      "id": "activity-013",
+      "timestamp": "2024-01-08T13:47:10Z",
+      "eventType": "cancellation_completed",
+      "description": "Cancellation #0976 completed successfully",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-008",
+      "orderNumber": "#0976",
+      "customerName": "Manish Gupta",
+      "details": {
+        "refundAmount": 2199.00,
+        "processingTime": 130
+      }
+    },
+    {
+      "id": "activity-014",
+      "timestamp": "2024-01-07T10:00:00Z",
+      "eventType": "cancellation_requested",
+      "description": "Customer requested cancellation for order #0954",
+      "actor": "Deepa Joshi",
+      "actorType": "customer",
+      "cancellationRecordId": "cancel-rec-009",
+      "orderNumber": "#0954",
+      "customerName": "Deepa Joshi",
+      "details": {
+        "reason": "other"
+      }
+    },
+    {
+      "id": "activity-015",
+      "timestamp": "2024-01-06T16:20:30Z",
+      "eventType": "cancellation_rejected",
+      "description": "System auto-rejected cancellation #0932 (fraud)",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-010",
+      "orderNumber": "#0932",
+      "customerName": "Arjun Desai",
+      "details": {
+        "reason": "fraud",
+        "riskLevel": "high"
+      }
+    },
+    {
+      "id": "activity-016",
+      "timestamp": "2024-01-06T16:20:00Z",
+      "eventType": "fraud_alert",
+      "description": "Automated fraud detection triggered",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-010",
+      "orderNumber": "#0932",
+      "customerName": "Arjun Desai",
+      "details": {
+        "riskLevel": "high",
+        "detectionType": "automated"
+      }
+    },
+    {
+      "id": "activity-017",
+      "timestamp": "2024-01-15T09:30:00Z",
+      "eventType": "inventory_restocked",
+      "description": "Inventory restocked for cancelled order #1158",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-001",
+      "orderNumber": "#1158",
+      "customerName": "Priya Sharma",
+      "details": {
+        "itemsCount": 2
+      }
+    },
+    {
+      "id": "activity-018",
+      "timestamp": "2024-01-14T14:20:00Z",
+      "eventType": "manual_review",
+      "description": "Order #1123 sent to manual review queue",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-002",
+      "orderNumber": "#1123",
+      "customerName": "Amit Patel",
+      "details": {
+        "queueId": "review-queue-042"
+      }
+    },
+    {
+      "id": "activity-019",
+      "timestamp": "2024-01-13T08:00:00Z",
+      "eventType": "customer_notified",
+      "description": "Cancellation confirmation sent to customer",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": "cancel-rec-003",
+      "orderNumber": "#1098",
+      "customerName": "Sneha Reddy",
+      "details": {
+        "notificationType": "email"
+      }
+    },
+    {
+      "id": "activity-020",
+      "timestamp": "2024-01-12T10:15:00Z",
+      "eventType": "system_action",
+      "description": "Daily metrics report generated",
+      "actor": "System",
+      "actorType": "system",
+      "cancellationRecordId": null,
+      "orderNumber": null,
+      "customerName": null,
+      "details": {
+        "reportType": "daily_metrics",
+        "date": "2024-01-12"
+      }
+    }
+  ],
+  "fraudAlerts": [
+    {
+      "id": "fraud-alert-001",
+      "cancellationRecordId": "cancel-rec-007",
+      "orderNumber": "#0998",
+      "orderId": "ord-2024-0998",
+      "customerName": "Kavita Nair",
+      "customerEmail": "kavita.nair@email.com",
+      "customerPhone": "+91 96789 01234",
+      "riskLevel": "high",
+      "riskScore": 8.5,
+      "rejectionReason": "Suspicious payment pattern - multiple failed attempts from new account",
+      "rejectedAt": "2024-01-09T15:12:00Z",
+      "rejectedBy": "Merchant Admin",
+      "riskFactors": [
+        "suspicious_payment_pattern",
+        "new_customer",
+        "high_value_order",
+        "rapid_order_placement"
+      ],
+      "orderAmount": 4599.00,
+      "orderCreatedAt": "2024-01-09T14:50:00Z",
+      "timeToCancel": 20,
+      "status": "rejected"
+    },
+    {
+      "id": "fraud-alert-002",
+      "cancellationRecordId": "cancel-rec-010",
+      "orderNumber": "#0932",
+      "orderId": "ord-2024-0932",
+      "customerName": "Arjun Desai",
+      "customerEmail": "arjun.desai@email.com",
+      "customerPhone": "+91 99012 34567",
+      "riskLevel": "high",
+      "riskScore": 9.2,
+      "rejectionReason": "Automated fraud detection - multiple failed payment attempts from suspicious IP",
+      "rejectedAt": "2024-01-06T16:20:30Z",
+      "rejectedBy": "System",
+      "riskFactors": [
+        "multiple_failed_payments",
+        "suspicious_ip_address",
+        "new_customer",
+        "high_value_order"
+      ],
+      "orderAmount": 3299.00,
+      "orderCreatedAt": "2024-01-06T16:15:00Z",
+      "timeToCancel": 5,
+      "status": "rejected"
+    },
+    {
+      "id": "fraud-alert-003",
+      "cancellationRecordId": "cancel-rec-009",
+      "orderNumber": "#0954",
+      "orderId": "ord-2024-0954",
+      "customerName": "Deepa Joshi",
+      "customerEmail": "deepa.joshi@email.com",
+      "customerPhone": "+91 98901 23456",
+      "riskLevel": "medium",
+      "riskScore": 6.8,
+      "rejectionReason": "Medium risk - unusual cancellation pattern, pending review",
+      "rejectedAt": null,
+      "rejectedBy": null,
+      "riskFactors": [
+        "unusual_cancellation_pattern",
+        "address_mismatch",
+        "multiple_orders_same_day"
+      ],
+      "orderAmount": 3499.00,
+      "orderCreatedAt": "2024-01-06T09:15:00Z",
+      "timeToCancel": 1065,
+      "status": "pending"
+    }
+  ]
+}
+
+

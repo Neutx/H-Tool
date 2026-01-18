@@ -1,0 +1,560 @@
+{
+  "_meta": {
+    "models": {
+      "refundTransactions": "A refund payment being processed through a payment processor (cards, PayPal, digital wallets). Tracks the amount, current status (pending/completed/failed), which payment processor is being used, how many retry attempts have been made, and when it was completed or failed. Includes failure reasons for troubleshooting.",
+      "orders": "A Shopify order containing all order details: order number, status (open/pending/fulfilled/cancelled), fulfillment status, payment status, financial status, total amounts, tax, shipping costs, timestamps, and associated line items. The core entity that cancellation requests act upon.",
+      "lineItems": "An individual product within an order. Contains product ID, SKU, title, quantity, price, variant information, and whether inventory management is enabled for this product. Used to calculate partial refunds and determine restock eligibility.",
+      "customers": "The person who placed the order. Includes email, name, customer ID, order history, and risk level. Used for notifications, fraud detection, and analyzing cancellation patterns per customer."
+    },
+    "relationships": [
+      "Each RefundTransaction references one Order",
+      "Each Order has multiple LineItems (the products purchased)",
+      "Each Order belongs to one Customer",
+      "RefundTransactions are processed through payment processor integrations"
+    ]
+  },
+  "dashboardMetrics": {
+    "totalRefundsToday": 8,
+    "totalRefundsWeek": 34,
+    "totalRefundsMonth": 142,
+    "successRate": 94.3,
+    "failedCount": 3,
+    "totalAmountRefunded": 12847.65,
+    "trendIndicator": "up"
+  },
+  "refundTransactions": [
+    {
+      "id": "ref-txn-001",
+      "orderId": "ord-2024-1158",
+      "orderNumber": "#1158",
+      "customerId": "cust-4782",
+      "customerName": "Priya Sharma",
+      "customerPhone": "+91 98765 43210",
+      "customerEmail": "priya.sharma@email.com",
+      "refundAmount": 2499.00,
+      "originalOrderTotal": 2499.00,
+      "refundType": "full",
+      "status": "completed",
+      "paymentProcessor": "Shopify Payments",
+      "transactionId": "txn-shop-9847563",
+      "requestedDate": "2024-01-08T14:23:00Z",
+      "completedDate": "2024-01-08T14:24:12Z",
+      "retryCount": 0,
+      "failureReason": null,
+      "processingTime": 72,
+      "lineItems": [
+        {
+          "id": "li-001",
+          "productId": "prod-8872",
+          "sku": "WM-HOOD-BLK-L",
+          "title": "Winter Hoodie - Black",
+          "quantity": 1,
+          "price": 1999.00,
+          "variantId": "var-8872-l"
+        },
+        {
+          "id": "li-002",
+          "productId": "prod-3341",
+          "sku": "ACC-CAP-NVY",
+          "title": "Baseball Cap - Navy",
+          "quantity": 1,
+          "price": 500.00,
+          "variantId": "var-3341-os"
+        }
+      ],
+      "orderDetails": {
+        "subtotal": 2199.00,
+        "tax": 220.00,
+        "shipping": 80.00,
+        "createdAt": "2024-01-07T09:15:00Z",
+        "cancellationReason": "Customer changed mind",
+        "caseInitiatedDate": "2024-01-08T14:20:00Z"
+      },
+      "internalNotes": []
+    },
+    {
+      "id": "ref-txn-002",
+      "orderId": "ord-2024-1162",
+      "orderNumber": "#1162",
+      "customerId": "cust-5521",
+      "customerName": "Rahul Verma",
+      "customerPhone": "+91 87654 32109",
+      "customerEmail": "rahul.v@email.com",
+      "refundAmount": 899.00,
+      "originalOrderTotal": 1798.00,
+      "refundType": "partial",
+      "status": "processing",
+      "paymentProcessor": "PayPal",
+      "transactionId": "txn-pp-7734521",
+      "requestedDate": "2024-01-09T10:45:00Z",
+      "completedDate": null,
+      "retryCount": 0,
+      "failureReason": null,
+      "processingTime": null,
+      "lineItems": [
+        {
+          "id": "li-003",
+          "productId": "prod-6623",
+          "sku": "SHO-RUN-BLU-10",
+          "title": "Running Shoes - Blue",
+          "quantity": 1,
+          "price": 899.00,
+          "variantId": "var-6623-10",
+          "refunded": true
+        },
+        {
+          "id": "li-004",
+          "productId": "prod-6623",
+          "sku": "SHO-RUN-BLU-9",
+          "title": "Running Shoes - Blue",
+          "quantity": 1,
+          "price": 899.00,
+          "variantId": "var-6623-9",
+          "refunded": false
+        }
+      ],
+      "orderDetails": {
+        "subtotal": 1798.00,
+        "tax": 0.00,
+        "shipping": 0.00,
+        "createdAt": "2024-01-08T16:22:00Z",
+        "cancellationReason": "Wrong size ordered",
+        "caseInitiatedDate": "2024-01-09T10:40:00Z"
+      },
+      "internalNotes": [
+        {
+          "id": "note-001",
+          "timestamp": "2024-01-09T10:46:00Z",
+          "userId": "merchant-001",
+          "userName": "Store Admin",
+          "content": "Customer keeping one pair, refunding the other. PayPal processing may take 5-10 minutes."
+        }
+      ]
+    },
+    {
+      "id": "ref-txn-003",
+      "orderId": "ord-2024-1145",
+      "orderNumber": "#1145",
+      "customerId": "cust-2938",
+      "customerName": "Anjali Desai",
+      "customerPhone": "+91 76543 21098",
+      "customerEmail": "anjali.desai@email.com",
+      "refundAmount": 4599.00,
+      "originalOrderTotal": 4599.00,
+      "refundType": "full",
+      "status": "failed",
+      "paymentProcessor": "Stripe",
+      "transactionId": "txn-stripe-4421890",
+      "requestedDate": "2024-01-09T08:12:00Z",
+      "completedDate": null,
+      "retryCount": 3,
+      "failureReason": "Payment processor timeout - card issuer not responding",
+      "processingTime": null,
+      "lineItems": [
+        {
+          "id": "li-005",
+          "productId": "prod-9921",
+          "sku": "LAPTOP-BAG-BLK",
+          "title": "Premium Laptop Backpack - Black",
+          "quantity": 1,
+          "price": 4599.00,
+          "variantId": "var-9921-os"
+        }
+      ],
+      "orderDetails": {
+        "subtotal": 4100.00,
+        "tax": 410.00,
+        "shipping": 89.00,
+        "createdAt": "2024-01-06T11:30:00Z",
+        "cancellationReason": "Item out of stock",
+        "caseInitiatedDate": "2024-01-09T08:10:00Z"
+      },
+      "internalNotes": [
+        {
+          "id": "note-002",
+          "timestamp": "2024-01-09T08:15:00Z",
+          "userId": "merchant-001",
+          "userName": "Store Admin",
+          "content": "Auto-retry failed 3 times. Customer notified via email about delay."
+        },
+        {
+          "id": "note-003",
+          "timestamp": "2024-01-09T09:22:00Z",
+          "userId": "merchant-001",
+          "userName": "Store Admin",
+          "content": "Contacted Stripe support. Issue with customer's bank gateway. Will retry manually once resolved."
+        }
+      ]
+    },
+    {
+      "id": "ref-txn-004",
+      "orderId": "ord-2024-1168",
+      "orderNumber": "#1168",
+      "customerId": "cust-7742",
+      "customerName": "Vikram Singh",
+      "customerPhone": "+91 65432 10987",
+      "customerEmail": "vikram.s@email.com",
+      "refundAmount": 1299.00,
+      "originalOrderTotal": 1299.00,
+      "refundType": "full",
+      "status": "pending",
+      "paymentProcessor": "Shopify Payments",
+      "transactionId": null,
+      "requestedDate": "2024-01-09T11:05:00Z",
+      "completedDate": null,
+      "retryCount": 0,
+      "failureReason": null,
+      "processingTime": null,
+      "lineItems": [
+        {
+          "id": "li-006",
+          "productId": "prod-5534",
+          "sku": "TSH-COTT-WHT-M",
+          "title": "Cotton T-Shirt - White",
+          "quantity": 3,
+          "price": 433.00,
+          "variantId": "var-5534-m"
+        }
+      ],
+      "orderDetails": {
+        "subtotal": 1150.00,
+        "tax": 115.00,
+        "shipping": 34.00,
+        "createdAt": "2024-01-08T20:18:00Z",
+        "cancellationReason": "Duplicate order",
+        "caseInitiatedDate": "2024-01-09T11:03:00Z"
+      },
+      "internalNotes": []
+    },
+    {
+      "id": "ref-txn-005",
+      "orderId": "ord-2024-1139",
+      "orderNumber": "#1139",
+      "customerId": "cust-8821",
+      "customerName": "Neha Kapoor",
+      "customerPhone": "+91 54321 09876",
+      "customerEmail": "neha.k@email.com",
+      "refundAmount": 650.00,
+      "originalOrderTotal": 3250.00,
+      "refundType": "partial",
+      "status": "completed",
+      "paymentProcessor": "Razorpay",
+      "transactionId": "txn-rp-8842376",
+      "requestedDate": "2024-01-08T17:30:00Z",
+      "completedDate": "2024-01-08T17:31:45Z",
+      "retryCount": 0,
+      "failureReason": null,
+      "processingTime": 105,
+      "lineItems": [
+        {
+          "id": "li-007",
+          "productId": "prod-2211",
+          "sku": "DRS-SUM-FLR-S",
+          "title": "Summer Dress - Floral",
+          "quantity": 1,
+          "price": 1200.00,
+          "variantId": "var-2211-s",
+          "refunded": false
+        },
+        {
+          "id": "li-008",
+          "productId": "prod-2212",
+          "sku": "DRS-SUM-PLN-M",
+          "title": "Summer Dress - Plain",
+          "quantity": 1,
+          "price": 1100.00,
+          "variantId": "var-2212-m",
+          "refunded": false
+        },
+        {
+          "id": "li-009",
+          "productId": "prod-7733",
+          "sku": "ACC-SUN-BLK",
+          "title": "Sunglasses - Black",
+          "quantity": 1,
+          "price": 650.00,
+          "variantId": "var-7733-os",
+          "refunded": true
+        },
+        {
+          "id": "li-010",
+          "productId": "prod-4455",
+          "sku": "BAG-HND-BRN",
+          "title": "Handbag - Brown",
+          "quantity": 1,
+          "price": 300.00,
+          "variantId": "var-4455-os",
+          "refunded": false
+        }
+      ],
+      "orderDetails": {
+        "subtotal": 3100.00,
+        "tax": 150.00,
+        "shipping": 0.00,
+        "createdAt": "2024-01-06T14:45:00Z",
+        "cancellationReason": "Item damaged on arrival",
+        "caseInitiatedDate": "2024-01-08T17:25:00Z"
+      },
+      "internalNotes": [
+        {
+          "id": "note-004",
+          "timestamp": "2024-01-08T17:28:00Z",
+          "userId": "merchant-002",
+          "userName": "Support Team",
+          "content": "Customer sent photos of damaged sunglasses. Refunding that item only. Other items delivered in good condition."
+        }
+      ]
+    },
+    {
+      "id": "ref-txn-006",
+      "orderId": "ord-2024-1151",
+      "orderNumber": "#1151",
+      "customerId": "cust-3309",
+      "customerName": "Arjun Patel",
+      "customerPhone": "+91 43210 98765",
+      "customerEmail": "arjun.patel@email.com",
+      "refundAmount": 7899.00,
+      "originalOrderTotal": 7899.00,
+      "refundType": "full",
+      "status": "retry_in_progress",
+      "paymentProcessor": "PayPal",
+      "transactionId": "txn-pp-5567821",
+      "requestedDate": "2024-01-09T09:18:00Z",
+      "completedDate": null,
+      "retryCount": 1,
+      "failureReason": "Temporary network error - retry scheduled",
+      "processingTime": null,
+      "lineItems": [
+        {
+          "id": "li-011",
+          "productId": "prod-1122",
+          "sku": "JKT-LTH-BLK-L",
+          "title": "Leather Jacket - Black",
+          "quantity": 1,
+          "price": 7899.00,
+          "variantId": "var-1122-l"
+        }
+      ],
+      "orderDetails": {
+        "subtotal": 7200.00,
+        "tax": 699.00,
+        "shipping": 0.00,
+        "createdAt": "2024-01-07T13:40:00Z",
+        "cancellationReason": "Customer changed mind",
+        "caseInitiatedDate": "2024-01-09T09:15:00Z"
+      },
+      "internalNotes": [
+        {
+          "id": "note-005",
+          "timestamp": "2024-01-09T09:20:00Z",
+          "userId": "system",
+          "userName": "System",
+          "content": "First attempt failed due to network error. Auto-retry in 2 seconds (attempt 2/3)."
+        }
+      ]
+    },
+    {
+      "id": "ref-txn-007",
+      "orderId": "ord-2024-1134",
+      "orderNumber": "#1134",
+      "customerId": "cust-6654",
+      "customerName": "Meera Iyer",
+      "customerPhone": "+91 32109 87654",
+      "customerEmail": "meera.iyer@email.com",
+      "refundAmount": 1850.00,
+      "originalOrderTotal": 1850.00,
+      "refundType": "full",
+      "status": "completed",
+      "paymentProcessor": "Stripe",
+      "transactionId": "txn-stripe-9982341",
+      "requestedDate": "2024-01-08T13:22:00Z",
+      "completedDate": "2024-01-08T13:23:18Z",
+      "retryCount": 0,
+      "failureReason": null,
+      "processingTime": 78,
+      "lineItems": [
+        {
+          "id": "li-012",
+          "productId": "prod-8844",
+          "sku": "SHO-FRM-BLK-8",
+          "title": "Formal Shoes - Black",
+          "quantity": 1,
+          "price": 1850.00,
+          "variantId": "var-8844-8"
+        }
+      ],
+      "orderDetails": {
+        "subtotal": 1650.00,
+        "tax": 150.00,
+        "shipping": 50.00,
+        "createdAt": "2024-01-06T08:10:00Z",
+        "cancellationReason": "Found better price elsewhere",
+        "caseInitiatedDate": "2024-01-08T13:20:00Z"
+      },
+      "internalNotes": []
+    },
+    {
+      "id": "ref-txn-008",
+      "orderId": "ord-2024-1172",
+      "orderNumber": "#1172",
+      "customerId": "cust-9987",
+      "customerName": "Sanjay Kumar",
+      "customerPhone": "+91 21098 76543",
+      "customerEmail": "sanjay.k@email.com",
+      "refundAmount": 0.00,
+      "originalOrderTotal": 3499.00,
+      "refundType": "none",
+      "status": "completed",
+      "paymentProcessor": "Shopify Payments",
+      "transactionId": null,
+      "requestedDate": "2024-01-09T11:30:00Z",
+      "completedDate": "2024-01-09T11:31:00Z",
+      "retryCount": 0,
+      "failureReason": null,
+      "processingTime": 60,
+      "lineItems": [
+        {
+          "id": "li-013",
+          "productId": "prod-3322",
+          "sku": "WAT-SMT-BLK",
+          "title": "Smartwatch - Black",
+          "quantity": 1,
+          "price": 3499.00,
+          "variantId": "var-3322-os"
+        }
+      ],
+      "orderDetails": {
+        "subtotal": 3200.00,
+        "tax": 299.00,
+        "shipping": 0.00,
+        "createdAt": "2024-01-08T22:45:00Z",
+        "cancellationReason": "Suspected fraud - under investigation",
+        "caseInitiatedDate": "2024-01-09T11:28:00Z"
+      },
+      "internalNotes": [
+        {
+          "id": "note-006",
+          "timestamp": "2024-01-09T11:29:00Z",
+          "userId": "merchant-001",
+          "userName": "Store Admin",
+          "content": "Fraud team investigating. High-risk score. Order canceled, no refund issued. Possible chargeback. Will issue store credit if customer proves legitimacy."
+        }
+      ]
+    },
+    {
+      "id": "ref-txn-009",
+      "orderId": "ord-2024-1148",
+      "orderNumber": "#1148",
+      "customerId": "cust-4456",
+      "customerName": "Divya Reddy",
+      "customerPhone": "+91 10987 65432",
+      "customerEmail": "divya.reddy@email.com",
+      "refundAmount": 2199.00,
+      "originalOrderTotal": 2199.00,
+      "refundType": "full",
+      "status": "failed",
+      "paymentProcessor": "Razorpay",
+      "transactionId": "txn-rp-1123498",
+      "requestedDate": "2024-01-09T10:10:00Z",
+      "completedDate": null,
+      "retryCount": 3,
+      "failureReason": "Invalid transaction ID - original payment not found in processor records",
+      "processingTime": null,
+      "lineItems": [
+        {
+          "id": "li-014",
+          "productId": "prod-6677",
+          "sku": "BIKE-HLM-RED-M",
+          "title": "Cycling Helmet - Red",
+          "quantity": 1,
+          "price": 1299.00,
+          "variantId": "var-6677-m"
+        },
+        {
+          "id": "li-015",
+          "productId": "prod-6678",
+          "sku": "BIKE-GLV-BLK-L",
+          "title": "Cycling Gloves - Black",
+          "quantity": 1,
+          "price": 900.00,
+          "variantId": "var-6678-l"
+        }
+      ],
+      "orderDetails": {
+        "subtotal": 2000.00,
+        "tax": 199.00,
+        "shipping": 0.00,
+        "createdAt": "2024-01-07T10:20:00Z",
+        "cancellationReason": "Customer changed mind",
+        "caseInitiatedDate": "2024-01-09T10:05:00Z"
+      },
+      "internalNotes": [
+        {
+          "id": "note-007",
+          "timestamp": "2024-01-09T10:12:00Z",
+          "userId": "merchant-002",
+          "userName": "Support Team",
+          "content": "Transaction ID mismatch with Razorpay. Checking with payment gateway team."
+        },
+        {
+          "id": "note-008",
+          "timestamp": "2024-01-09T10:45:00Z",
+          "userId": "merchant-002",
+          "userName": "Support Team",
+          "content": "Razorpay confirmed payment was authorized but not captured. Will void authorization instead of refunding."
+        }
+      ]
+    },
+    {
+      "id": "ref-txn-010",
+      "orderId": "ord-2024-1165",
+      "orderNumber": "#1165",
+      "customerId": "cust-5543",
+      "customerName": "Rajesh Nair",
+      "customerPhone": "+91 09876 54321",
+      "customerEmail": "rajesh.nair@email.com",
+      "refundAmount": 5499.00,
+      "originalOrderTotal": 5499.00,
+      "refundType": "full",
+      "status": "completed",
+      "paymentProcessor": "Shopify Payments",
+      "transactionId": "txn-shop-3347821",
+      "requestedDate": "2024-01-09T08:55:00Z",
+      "completedDate": "2024-01-09T08:56:20Z",
+      "retryCount": 0,
+      "failureReason": null,
+      "processingTime": 80,
+      "lineItems": [
+        {
+          "id": "li-016",
+          "productId": "prod-9988",
+          "sku": "CAM-DSLR-BLK",
+          "title": "DSLR Camera with Lens Kit",
+          "quantity": 1,
+          "price": 5499.00,
+          "variantId": "var-9988-kit"
+        }
+      ],
+      "orderDetails": {
+        "subtotal": 5000.00,
+        "tax": 499.00,
+        "shipping": 0.00,
+        "createdAt": "2024-01-08T19:30:00Z",
+        "cancellationReason": "Item out of stock",
+        "caseInitiatedDate": "2024-01-09T08:50:00Z"
+      },
+      "internalNotes": [
+        {
+          "id": "note-009",
+          "timestamp": "2024-01-09T08:52:00Z",
+          "userId": "merchant-001",
+          "userName": "Store Admin",
+          "content": "High-value item. Customer called to confirm cancellation. Inventory issue with supplier. Offered 10% discount for next order."
+        }
+      ]
+    }
+  ]
+}
+
+
+

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/sync/refunds",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}
