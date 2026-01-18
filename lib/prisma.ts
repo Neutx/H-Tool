@@ -17,14 +17,29 @@ function getEncodedDatabaseUrl(): string | undefined {
   const urlMatch = dbUrl.match(/^postgresql:\/\/([^:]+):([^@]+)@(.+)$/);
   
   if (!urlMatch) {
-    // URL format is invalid or already encoded, return as-is
+    // URL format is invalid, return as-is
     return dbUrl;
   }
 
   const [, username, password, rest] = urlMatch;
   
+  // Check if password is already URL-encoded (contains %XX patterns)
+  const isAlreadyEncoded = /%[0-9A-Fa-f]{2}/.test(password);
+  
+  if (isAlreadyEncoded) {
+    // Password is already encoded, return original
+    // #region agent log
+    console.log('[DEBUG] Password already encoded:', JSON.stringify({
+      location: 'lib/prisma.ts:encodePassword',
+      message: 'Password appears to be already URL-encoded',
+      data: { passwordLength: password.length, host: rest.split(':')[0] }
+    }));
+    // #endregion
+    return dbUrl;
+  }
+  
   // Check if password contains special characters that need encoding
-  const needsEncoding = /[@+$#%:/\?&=]/.test(password);
+  const needsEncoding = /[@+$#:/\?&=]/.test(password);
   
   if (!needsEncoding) {
     // No special characters, return original
