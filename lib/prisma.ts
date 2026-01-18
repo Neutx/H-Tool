@@ -29,6 +29,26 @@ function getEncodedDatabaseUrl(): string | undefined {
   const [hostPortDb, ...queryParts] = rest.split('?');
   const existingParams = queryParts.join('?');
   
+  // Check if using direct connection (port 5432) - should use pooler for serverless
+  const portMatch = hostPortDb.match(/:(\d+)/);
+  const port = portMatch ? parseInt(portMatch[1], 10) : null;
+  const isDirectConnection = port === 5432;
+  const isPoolerConnection = port === 6543 || hostPortDb.includes('pooler');
+  
+  // #region agent log
+  if (isDirectConnection && process.env.NODE_ENV === 'production') {
+    console.log('[DEBUG] Direct connection detected:', JSON.stringify({
+      location: 'lib/prisma.ts:detectConnection',
+      message: 'Using direct connection (port 5432) - consider using pooler for serverless',
+      data: {
+        port,
+        host: hostPortDb.split(':')[0],
+        recommendation: 'Use connection pooler (port 6543) for Vercel serverless functions',
+      }
+    }));
+  }
+  // #endregion
+  
   // Check if password is already URL-encoded (contains %XX patterns)
   const isAlreadyEncoded = /%[0-9A-Fa-f]{2}/.test(password);
   
