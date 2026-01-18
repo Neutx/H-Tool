@@ -4,8 +4,8 @@ import type {
   Rule,
   RuleConditions,
   RuleActions,
-  RiskLevel,
 } from "@/lib/types";
+import { RiskLevel } from "@/lib/types";
 import { prisma } from "@/lib/prisma";
 import { incrementRuleUsage } from "@/app/actions/rules";
 
@@ -162,9 +162,9 @@ async function evaluateRuleConditions(
  * Calculate risk level from risk score
  */
 function calculateRiskLevel(riskScore: number): RiskLevel {
-  if (riskScore >= 0.7) return "high";
-  if (riskScore >= 0.4) return "medium";
-  return "low";
+  if (riskScore >= 0.7) return RiskLevel.HIGH;
+  if (riskScore >= 0.4) return RiskLevel.MEDIUM;
+  return RiskLevel.LOW;
 }
 
 /**

@@ -257,7 +257,7 @@ export async function processRefund(data: {
             where: { id: refundTransaction.id },
             data: {
               status: "failed",
-              errorMessage: shopifyResult.error || "Shopify API error",
+              errorMessage: "Shopify API error",
             },
           });
         }
@@ -340,7 +340,7 @@ export async function retryRefund(refundId: string) {
           where: { id: refundId },
           data: {
             status: "failed",
-            errorMessage: shopifyResult.error || "Retry failed",
+            errorMessage: "Retry failed",
           },
         });
 

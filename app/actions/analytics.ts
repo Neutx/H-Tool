@@ -294,7 +294,7 @@ export async function getCancellationRecords(
         refundTransactions: {
           select: {
             id: true,
-            amount: true,
+            refundAmount: true,
             status: true,
           },
           take: 1,
@@ -563,10 +563,10 @@ export async function getCancellationTimeline(cancellationRecordId: string) {
         refundTransactions: {
           select: {
             id: true,
-            amount: true,
+            refundAmount: true,
             status: true,
             createdAt: true,
-            completedAt: true,
+            processedAt: true,
           },
         },
       },
@@ -632,14 +632,14 @@ export async function getCancellationTimeline(cancellationRecordId: string) {
         actor: "System",
         actorType: "system",
         details: {
-          amount: refund.amount,
+          amount: refund.refundAmount,
         },
       });
 
-      if (refund.completedAt) {
+      if (refund.processedAt) {
         events.push({
           id: `${record.id}-refund-complete`,
-          timestamp: refund.completedAt.toISOString(),
+          timestamp: refund.processedAt.toISOString(),
           eventType: refund.status === "completed" ? "refund_completed" : "refund_failed",
           description: `Refund ${refund.status}`,
           actor: "System",

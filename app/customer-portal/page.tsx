@@ -48,7 +48,7 @@ export default function CustomerPortalPage() {
     // Refresh order data
     if (order) {
       const result = await lookupOrder(order.orderNumber, order.customer.email);
-      if (result.success && result.data) {
+      if (result.success && "data" in result && result.data) {
         setOrder(result.data);
         sessionStorage.setItem("portal_order", JSON.stringify(result.data));
       }

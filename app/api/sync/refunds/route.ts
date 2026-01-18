@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
     const result = await syncShopifyRefunds(DEMO_ORG_ID, 50);
 
     return NextResponse.json({
-      success: true,
       message: "Refunds synced successfully",
       ...result,
     });
@@ -55,7 +54,6 @@ export async function POST(request: NextRequest) {
     const result = await syncShopifyRefunds(DEMO_ORG_ID, 50);
 
     return NextResponse.json({
-      success: true,
       message: "Manual sync completed",
       ...result,
     });

@@ -48,11 +48,11 @@ export async function submitCancellationRequest(data: CancellationRequestData) {
     const cancellationRequest = await prisma.cancellationRequest.create({
       data: {
         orderId: data.orderId,
-        customerId: order.customer.email, // Using email as customer identifier
+        customerId: order.customer.email || "unknown", // Using email as customer identifier
         organizationId: "cmkirf3lj0000jhhexsx6p1e3", // Demo org ID
         reason: data.reason,
         reasonCategory: data.reasonCategory,
-        customerNotes: data.customerNotes,
+        notes: data.customerNotes,
         refundPreference: data.refundPreference || "full",
         initiatedBy: "customer",
         status: "pending",
@@ -65,8 +65,7 @@ export async function submitCancellationRequest(data: CancellationRequestData) {
       data: {
         cancellationRequestId: cancellationRequest.id,
         orderId: data.orderId,
-        priority: "medium",
-        assignedTo: null, // Will be assigned by admin
+        riskLevel: "medium",
       },
     });
 
@@ -98,9 +97,10 @@ export async function getCancellationStatus(cancellationRequestId: string) {
         },
         cancellationRecord: {
           include: {
-            refundTransaction: true,
+            refundTransactions: true,
           },
         },
+        reviewQueueItem: true,
       },
     });
 
@@ -140,8 +140,8 @@ export async function getCancellationStatus(cancellationRequestId: string) {
         status: request.status,
         reason: request.reason,
         reasonCategory: request.reasonCategory,
-        customerNotes: request.customerNotes,
-        adminResponse: request.adminResponse,
+        customerNotes: request.notes || null,
+        adminResponse: request.reviewQueueItem?.reviewNotes || null,
         refundPreference: request.refundPreference,
         createdAt: request.createdAt,
         updatedAt: request.updatedAt,
@@ -183,7 +183,7 @@ export async function respondToInfoRequest(
     await prisma.cancellationRequest.update({
       where: { id: cancellationRequestId },
       data: {
-        customerNotes: response,
+        notes: response,
         status: "pending", // Move back to pending for admin review
         updatedAt: new Date(),
       },
@@ -193,7 +193,7 @@ export async function respondToInfoRequest(
     await prisma.reviewQueueItem.updateMany({
       where: { cancellationRequestId },
       data: {
-        status: "pending",
+        reviewStatus: "pending",
         updatedAt: new Date(),
       },
     });
@@ -234,7 +234,7 @@ export async function cancelCancellationRequest(cancellationRequestId: string) {
       where: { id: cancellationRequestId },
       data: {
         status: "denied",
-        adminResponse: "Cancelled by customer",
+        notes: "Cancelled by customer",
         updatedAt: new Date(),
       },
     });

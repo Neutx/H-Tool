@@ -87,13 +87,15 @@ export async function getOrderForPortal(orderId: string) {
           include: {
             product: {
               select: {
-                title: true,
-                imageUrl: true,
+                name: true,
               },
             },
           },
         },
-        cancellationRequest: {
+        cancellationRequests: {
+          include: {
+            reviewQueueItem: true,
+          },
           orderBy: { createdAt: "desc" },
           take: 1,
         },
@@ -121,19 +123,19 @@ export async function getOrderForPortal(orderId: string) {
         quantity: item.quantity,
         price: item.price,
         totalPrice: item.totalPrice,
-        imageUrl: item.product?.imageUrl,
+        imageUrl: undefined,
       })),
-      cancellationRequest: order.cancellationRequest?.[0]
+      cancellationRequest: order.cancellationRequests?.[0]
         ? {
-            id: order.cancellationRequest[0].id,
-            status: order.cancellationRequest[0].status,
-            reason: order.cancellationRequest[0].reason,
-            reasonCategory: order.cancellationRequest[0].reasonCategory,
-            createdAt: order.cancellationRequest[0].createdAt,
-            updatedAt: order.cancellationRequest[0].updatedAt,
-            customerNotes: order.cancellationRequest[0].customerNotes || undefined,
-            adminResponse: order.cancellationRequest[0].adminResponse || undefined,
-            refundPreference: order.cancellationRequest[0].refundPreference || undefined,
+            id: order.cancellationRequests[0].id,
+            status: order.cancellationRequests[0].status,
+            reason: order.cancellationRequests[0].reason,
+            reasonCategory: order.cancellationRequests[0].reasonCategory,
+            createdAt: order.cancellationRequests[0].createdAt,
+            updatedAt: order.cancellationRequests[0].updatedAt,
+            customerNotes: order.cancellationRequests[0].notes || undefined,
+            adminResponse: order.cancellationRequests[0].reviewQueueItem?.reviewNotes || undefined,
+            refundPreference: order.cancellationRequests[0].refundPreference || undefined,
           }
         : undefined,
     };
@@ -154,9 +156,10 @@ export function isOrderCancellable(order: any): {
 } {
   // Already has pending or approved cancellation
   if (
-    order.cancellationRequest &&
+    order.cancellationRequests &&
+    order.cancellationRequests.length > 0 &&
     ["pending", "approved", "processing"].includes(
-      order.cancellationRequest.status
+      order.cancellationRequests[0].status
     )
   ) {
     return {
@@ -166,7 +169,7 @@ export function isOrderCancellable(order: any): {
   }
 
   // Already completed cancellation
-  if (order.cancellationRequest?.status === "completed") {
+  if (order.cancellationRequests?.[0]?.status === "completed") {
     return {
       eligible: false,
       reason: "This order has already been cancelled",

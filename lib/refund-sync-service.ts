@@ -31,10 +31,10 @@ export async function syncShopifyRefunds(
     const shopifyResponse = await shopify.getRecentRefunds(limit);
 
     if (!shopifyResponse.success || !shopifyResponse.data) {
-      throw new Error(shopifyResponse.error || "Failed to fetch refunds");
+      throw new Error("Failed to fetch refunds");
     }
 
-    const refunds = shopifyResponse.data.refunds?.edges || [];
+    const refunds = ("refunds" in shopifyResponse.data && shopifyResponse.data.refunds?.edges) || [];
 
     for (const edge of refunds) {
       try {
