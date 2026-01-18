@@ -29,24 +29,24 @@ Go to your project settings > Environment Variables and add the following:
 
 1. **Database:**
    ```
-   DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@db.typrzhuntlifvlbrqhyp.supabase.co:5432/postgres
+   DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@db.your-project.supabase.co:5432/postgres
    ```
 
 2. **Supabase:**
    ```
-   NEXT_PUBLIC_SUPABASE_URL=https://typrzhuntlifvlbrqhyp.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_gkLbpJpljWVJ_BJIX_t-Zg_ZXDWdC_2
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
    ```
 
 3. **Firebase:**
    ```
-   NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyDOdn_PAwNu_wOkHiTLfmGC_H0Ae6Y4_5A
-   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=h-tool0.firebaseapp.com
-   NEXT_PUBLIC_FIREBASE_PROJECT_ID=h-tool0
-   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=h-tool0.firebasestorage.app
-   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=856538609226
-   NEXT_PUBLIC_FIREBASE_APP_ID=1:856538609226:web:4307abf81578ebc4be98b3
-   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-GSYKWV2JTM
+   NEXT_PUBLIC_FIREBASE_API_KEY=your-firebase-api-key
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-messaging-sender-id
+   NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-measurement-id
    ```
 
 4. **Shopify:**
