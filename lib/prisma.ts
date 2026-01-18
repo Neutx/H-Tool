@@ -5,15 +5,17 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
- * Helper function to encode password in DATABASE_URL if it contains special characters
- * PostgreSQL connection strings require URL encoding for special characters like @, +, $, etc.
+ * Helper function to encode password and ensure SSL parameters in DATABASE_URL
+ * PostgreSQL connection strings require:
+ * 1. URL encoding for special characters like @, +, $, etc.
+ * 2. SSL mode parameter for Supabase (sslmode=require)
  */
 function getEncodedDatabaseUrl(): string | undefined {
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) return undefined;
 
   // Check if password contains special characters that need encoding
-  // Format: postgresql://user:password@host:port/db
+  // Format: postgresql://user:password@host:port/db?params
   const urlMatch = dbUrl.match(/^postgresql:\/\/([^:]+):([^@]+)@(.+)$/);
   
   if (!urlMatch) {
@@ -23,46 +25,91 @@ function getEncodedDatabaseUrl(): string | undefined {
 
   const [, username, password, rest] = urlMatch;
   
+  // Split rest into host:port/db and query params
+  const [hostPortDb, ...queryParts] = rest.split('?');
+  const existingParams = queryParts.join('?');
+  
   // Check if password is already URL-encoded (contains %XX patterns)
   const isAlreadyEncoded = /%[0-9A-Fa-f]{2}/.test(password);
   
-  if (isAlreadyEncoded) {
-    // Password is already encoded, return original
+  let finalPassword = password;
+  let passwordWasEncoded = false;
+  
+  if (!isAlreadyEncoded) {
+    // Check if password contains special characters that need encoding
+    const needsEncoding = /[@+$#:/\?&=]/.test(password);
+    
+    if (needsEncoding) {
+      // Encode the password
+      finalPassword = encodeURIComponent(password);
+      passwordWasEncoded = true;
+      
+      // #region agent log
+      console.log('[DEBUG] Password encoding:', JSON.stringify({
+        location: 'lib/prisma.ts:encodePassword',
+        message: 'Password encoded for DATABASE_URL',
+        data: {
+          originalPasswordLength: password.length,
+          encodedPasswordLength: finalPassword.length,
+          passwordContainsSpecialChars: true,
+          host: hostPortDb.split(':')[0],
+        }
+      }));
+      // #endregion
+    }
+  } else {
     // #region agent log
     console.log('[DEBUG] Password already encoded:', JSON.stringify({
       location: 'lib/prisma.ts:encodePassword',
       message: 'Password appears to be already URL-encoded',
-      data: { passwordLength: password.length, host: rest.split(':')[0] }
+      data: { passwordLength: password.length, host: hostPortDb.split(':')[0] }
     }));
     // #endregion
-    return dbUrl;
   }
   
-  // Check if password contains special characters that need encoding
-  const needsEncoding = /[@+$#:/\?&=]/.test(password);
+  // Check if SSL mode is already present
+  const hasSslMode = /[?&]sslmode=/.test(existingParams);
   
-  if (!needsEncoding) {
-    // No special characters, return original
-    return dbUrl;
+  // Build query parameters
+  const params = new URLSearchParams(existingParams);
+  
+  // Add SSL mode if not present (required for Supabase)
+  if (!hasSslMode) {
+    params.set('sslmode', 'require');
+    // #region agent log
+    console.log('[DEBUG] SSL mode added:', JSON.stringify({
+      location: 'lib/prisma.ts:addSslMode',
+      message: 'Added sslmode=require to DATABASE_URL',
+      data: { hadSslMode: false, host: hostPortDb.split(':')[0] }
+    }));
+    // #endregion
+  } else {
+    // #region agent log
+    console.log('[DEBUG] SSL mode already present:', JSON.stringify({
+      location: 'lib/prisma.ts:checkSslMode',
+      message: 'DATABASE_URL already has sslmode parameter',
+      data: { sslMode: params.get('sslmode'), host: hostPortDb.split(':')[0] }
+    }));
+    // #endregion
   }
-
-  // Encode the password
-  const encodedPassword = encodeURIComponent(password);
   
-  // Reconstruct the URL with encoded password
-  const encodedUrl = `postgresql://${username}:${encodedPassword}@${rest}`;
+  // Reconstruct the URL
+  const queryString = params.toString();
+  const encodedUrl = `postgresql://${username}:${finalPassword}@${hostPortDb}${queryString ? '?' + queryString : ''}`;
   
   // #region agent log
-  console.log('[DEBUG] Password encoding:', JSON.stringify({
-    location: 'lib/prisma.ts:encodePassword',
-    message: 'Password encoded for DATABASE_URL',
-    data: {
-      originalPasswordLength: password.length,
-      encodedPasswordLength: encodedPassword.length,
-      passwordContainsSpecialChars: true,
-      host: rest.split(':')[0],
-    }
-  }));
+  if (passwordWasEncoded || !hasSslMode) {
+    console.log('[DEBUG] DATABASE_URL processed:', JSON.stringify({
+      location: 'lib/prisma.ts:finalUrl',
+      message: 'DATABASE_URL processed with encoding/SSL',
+      data: {
+        passwordWasEncoded,
+        sslModeAdded: !hasSslMode,
+        finalUrlLength: encodedUrl.length,
+        host: hostPortDb.split(':')[0],
+      }
+    }));
+  }
   // #endregion
   
   return encodedUrl;
