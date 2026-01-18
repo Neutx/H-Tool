@@ -28,4 +28,5 @@ test("should toggle dark mode", async ({ page }) => {
   const html = page.locator("html");
   await expect(html).toHaveClass(/dark/);
 });
+//updated
 
