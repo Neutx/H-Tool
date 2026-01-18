@@ -5,6 +5,105 @@ import { prisma } from "@/lib/prisma";
 import type { CreateRuleFormData } from "@/lib/types";
 
 /**
+ * Seed templates and rules (internal helper)
+ */
+async function seedTemplatesAndRules(organizationId: string) {
+  try {
+    // Create Rule Templates if they don't exist
+    const existingTemplateCount = await prisma.ruleTemplate.count();
+    
+    if (existingTemplateCount === 0) {
+      console.log("📋 Creating rule templates...");
+      await Promise.all([
+        prisma.ruleTemplate.create({
+          data: {
+            name: "Auto-approve within 15 min",
+            description: "Automatically approve cancellations requested within 15 minutes of order placement",
+            category: "time_based",
+            conditions: {
+              timeWindow: 15,
+              orderStatus: ["open", "pending"],
+              fulfillmentStatus: ["unfulfilled"],
+            },
+            actions: {
+              type: "auto_approve",
+              notifyCustomer: true,
+            },
+            recommended: true,
+          },
+        }),
+        prisma.ruleTemplate.create({
+          data: {
+            name: "Flag high-risk orders",
+            description: "Send high-risk cancellation requests to manual review",
+            category: "risk_based",
+            conditions: {
+              riskLevel: ["high"],
+            },
+            actions: {
+              type: "manual_review",
+              notifyMerchant: true,
+            },
+            recommended: true,
+          },
+        }),
+        prisma.ruleTemplate.create({
+          data: {
+            name: "Deny if already fulfilled",
+            description: "Automatically deny cancellations for already fulfilled orders",
+            category: "status_based",
+            conditions: {
+              fulfillmentStatus: ["fulfilled"],
+            },
+            actions: {
+              type: "deny",
+              notifyCustomer: true,
+            },
+            recommended: true,
+          },
+        }),
+      ]);
+      console.log("✅ Created 3 rule templates");
+    }
+
+    // Create Active Rules if they don't exist
+    const existingRulesCount = await prisma.rule.count({
+      where: { organizationId },
+    });
+
+    if (existingRulesCount === 0) {
+      console.log("⚙️ Creating active rules...");
+      const templates = await prisma.ruleTemplate.findMany();
+      
+      await prisma.rule.create({
+        data: {
+          name: "Auto-approve within 15 min",
+          description: "Automatically approve cancellations within 15 minutes",
+          organizationId,
+          conditions: {
+            timeWindow: 15,
+            orderStatus: ["open", "pending"],
+            fulfillmentStatus: ["unfulfilled"],
+          },
+          actions: {
+            type: "auto_approve",
+            notifyCustomer: true,
+          },
+          priority: 1,
+          active: true,
+          usageCount: 0,
+          createdFromTemplateId: templates[0]?.id,
+        },
+      });
+      console.log("✅ Created 1 active rule");
+    }
+  } catch (error) {
+    console.error("Error seeding templates and rules:", error);
+    throw error;
+  }
+}
+
+/**
  * Get all rules for an organization
  */
 export async function getRules(organizationId: string) {
@@ -188,35 +287,34 @@ export async function getRuleTemplates() {
 
     console.log(`Found ${templates.length} rule templates`);
     
-    // If no templates, try to seed them via API call
+    // If no templates, try to seed them
     if (templates.length === 0) {
       console.log("No templates found, attempting to seed...");
       try {
-        // Use absolute URL in production, relative in development
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-          (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
-        const seedUrl = `${baseUrl}/api/seed`;
-        
-        console.log(`Calling seed endpoint: ${seedUrl}`);
-        const response = await fetch(seedUrl, { 
-          method: "POST",
-          cache: "no-store",
+        // Get or create organization first
+        let organization = await prisma.organization.findFirst({
+          where: { name: "Demo Store" },
         });
-        
-        if (response.ok) {
-          const seedData = await response.json();
-          console.log("Seed response:", seedData);
-          
-          // Retry fetching templates after seeding
-          const retryTemplates = await prisma.ruleTemplate.findMany({
-            orderBy: [{ recommended: "desc" }, { name: "asc" }],
+
+        if (!organization) {
+          organization = await prisma.organization.create({
+            data: {
+              name: "Demo Store",
+              shopifyStoreUrl: "demo-store.myshopify.com",
+              hasShopifyDomain: true,
+            },
           });
-          console.log(`Found ${retryTemplates.length} templates after seeding`);
-          return { success: true, data: retryTemplates };
-        } else {
-          const errorData = await response.json();
-          console.error("Seed failed:", errorData);
         }
+
+        // Seed templates and rules
+        await seedTemplatesAndRules(organization.id);
+        
+        // Retry fetching templates after seeding
+        const retryTemplates = await prisma.ruleTemplate.findMany({
+          orderBy: [{ recommended: "desc" }, { name: "asc" }],
+        });
+        console.log(`Found ${retryTemplates.length} templates after seeding`);
+        return { success: true, data: retryTemplates };
       } catch (seedError) {
         console.error("Error seeding templates:", seedError);
         // Don't fail completely, just return empty array
