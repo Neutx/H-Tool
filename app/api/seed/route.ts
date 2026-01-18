@@ -8,6 +8,9 @@ import { prisma } from "@/lib/prisma";
  * SECURITY: In production, you should protect this endpoint with authentication
  */
 export async function POST(request: NextRequest) {
+  // #region agent log
+  fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/seed/route.ts:10',message:'Seed endpoint called',data:{hasDatabaseUrl:!!process.env.DATABASE_URL,databaseUrlLength:process.env.DATABASE_URL?.length||0,databaseUrlHost:process.env.DATABASE_URL?.match(/@([^:]+):/)?.[1]||'NOT_FOUND',nodeEnv:process.env.NODE_ENV},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
   try {
     // Optional: Add authentication check here
     // const authHeader = request.headers.get("authorization");
@@ -17,10 +20,18 @@ export async function POST(request: NextRequest) {
 
     console.log("🌱 Starting database seeding...");
 
+    // #region agent log
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/seed/route.ts:22',message:'Before prisma.organization.findFirst',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+
     // Check if demo org already exists
     let organization = await prisma.organization.findFirst({
       where: { name: "Demo Store" },
     });
+
+    // #region agent log
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/seed/route.ts:27',message:'After prisma.organization.findFirst',data:{foundOrganization:!!organization,organizationId:organization?.id||null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
 
     if (!organization) {
       // Create Organization
@@ -151,6 +162,13 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Seed error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorName = error instanceof Error ? error.name : "Unknown";
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/seed/route.ts:132',message:'Seed error caught',data:{errorName,errorMessage,hasStack:!!errorStack,errorMessageIncludesDatabase:errorMessage.includes('database')||errorMessage.includes('DATABASE')||errorMessage.includes('Can\'t reach'),hasDatabaseUrl:!!process.env.DATABASE_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    
     console.error("Full error details:", errorMessage);
     return NextResponse.json(
       {

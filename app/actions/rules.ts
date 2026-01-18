@@ -107,11 +107,22 @@ async function seedTemplatesAndRules(organizationId: string) {
  * Get all rules for an organization
  */
 export async function getRules(organizationId: string) {
+  // #region agent log
+  fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/rules.ts:45',message:'getRules called',data:{organizationId,hasDatabaseUrl:!!process.env.DATABASE_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+  // #endregion
   try {
     // First, check if organization exists
+    // #region agent log
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/rules.ts:49',message:'Before prisma.organization.findUnique',data:{organizationId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+    
     const org = await prisma.organization.findUnique({
       where: { id: organizationId },
     });
+
+    // #region agent log
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/rules.ts:55',message:'After prisma.organization.findUnique',data:{foundOrg:!!org},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
 
     if (!org) {
       console.error(`Organization ${organizationId} not found`);
@@ -131,6 +142,12 @@ export async function getRules(organizationId: string) {
   } catch (error) {
     console.error("Error fetching rules:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorName = error instanceof Error ? error.name : "Unknown";
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/rules.ts:67',message:'getRules error caught',data:{errorName,errorMessage,hasDatabaseUrl:!!process.env.DATABASE_URL,errorMessageIncludesDatabase:errorMessage.includes('database')||errorMessage.includes('DATABASE')||errorMessage.includes('Can\'t reach')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+    
     console.error("Full error details:", errorMessage);
     return { success: false, error: `Failed to fetch rules: ${errorMessage}` };
   }
