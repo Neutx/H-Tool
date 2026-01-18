@@ -10,6 +10,7 @@ import { getRules, deleteRule, toggleRuleStatus, createRule, updateRule } from "
 import { getReviewQueueItems } from "@/app/actions/review-queue";
 import { getOrganizationId } from "@/app/actions/organization";
 import { showUndoDeleteToast } from "@/lib/undo-delete";
+import { toast } from "sonner";
 import type { Rule } from "@/lib/types";
 
 const DEMO_USER = "Admin User"; // TODO: Get from auth context
@@ -40,38 +41,82 @@ export default function CancellationRulesPage() {
     setLoading(false);
   };
 
+  const seedDatabase = async (orgId?: string) => {
+    try {
+      console.log("Calling seed endpoint...");
+      const seedResponse = await fetch("/api/seed", { method: "POST" });
+      if (seedResponse.ok) {
+        const seedData = await seedResponse.json();
+        console.log("Seed response:", seedData);
+        if (seedData.success) {
+          toast.success(
+            `Database seeded: ${seedData.templatesCount} templates, ${seedData.rulesCount} rules`,
+            { position: "bottom-left" }
+          );
+          return seedData.organizationId || orgId;
+        }
+      } else {
+        const errorData = await seedResponse.json();
+        console.error("Seed failed:", errorData);
+        toast.error(`Seed failed: ${errorData.error}`, {
+          position: "bottom-left",
+        });
+      }
+    } catch (seedErr) {
+      console.error("Error seeding database:", seedErr);
+      toast.error("Failed to seed database", {
+        position: "bottom-left",
+      });
+    }
+    return orgId;
+  };
+
   const loadRules = async () => {
     try {
       const orgResult = await getOrganizationId();
       const orgId = orgResult.organizationId || "cmkirf3lj0000jhhexsx6p1e3";
       
+      console.log(`Loading rules for organization: ${orgId}`);
       const result = await getRules(orgId);
+      
       if (result.success && result.data) {
+        console.log(`Loaded ${result.data.length} rules`);
         setRules(result.data as Rule[]);
+        
+        // If no rules found, try seeding
+        if (result.data.length === 0) {
+          console.log("No rules found, attempting to seed database...");
+          const seededOrgId = await seedDatabase(orgId);
+          if (seededOrgId) {
+            // Retry loading rules after seeding
+            const retryResult = await getRules(seededOrgId);
+            if (retryResult.success && retryResult.data) {
+              console.log(`Loaded ${retryResult.data.length} rules after seeding`);
+              setRules(retryResult.data as Rule[]);
+            }
+          }
+        }
       } else {
         console.error("Failed to load rules:", result.error);
-        // If no rules found, try seeding
-        if (result.error?.includes("not found") || (result.success && result.data?.length === 0)) {
-          console.log("No rules found, attempting to seed database...");
-          try {
-            const seedResponse = await fetch("/api/seed", { method: "POST" });
-            if (seedResponse.ok) {
-              const seedData = await seedResponse.json();
-              if (seedData.success) {
-                // Retry loading rules after seeding
-                const retryResult = await getRules(seedData.organizationId || orgId);
-                if (retryResult.success && retryResult.data) {
-                  setRules(retryResult.data as Rule[]);
-                }
-              }
+        // Try seeding if organization not found
+        if (result.error?.includes("not found")) {
+          const seededOrgId = await seedDatabase();
+          if (seededOrgId) {
+            const retryResult = await getRules(seededOrgId);
+            if (retryResult.success && retryResult.data) {
+              setRules(retryResult.data as Rule[]);
             }
-          } catch (seedErr) {
-            console.error("Error seeding database:", seedErr);
           }
+        } else {
+          toast.error(result.error || "Failed to load rules", {
+            position: "bottom-left",
+          });
         }
       }
     } catch (error) {
       console.error("Error loading rules:", error);
+      // Last resort: try seeding
+      await seedDatabase();
     }
   };
 
@@ -109,8 +154,14 @@ export default function CancellationRulesPage() {
       }
       await loadRules();
       setRuleFormOpen(false);
+      toast.success(selectedRule ? "Rule updated" : "Rule created", {
+        position: "bottom-left",
+      });
     } catch (error) {
       console.error("Error saving rule:", error);
+      toast.error("Failed to save rule", {
+        position: "bottom-left",
+      });
     }
   };
 

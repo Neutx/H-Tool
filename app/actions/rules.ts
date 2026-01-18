@@ -178,6 +178,7 @@ export async function reorderRules(
 
 /**
  * Get all rule templates
+ * Auto-seeds templates if none exist
  */
 export async function getRuleTemplates() {
   try {
@@ -185,10 +186,48 @@ export async function getRuleTemplates() {
       orderBy: [{ recommended: "desc" }, { name: "asc" }],
     });
 
+    console.log(`Found ${templates.length} rule templates`);
+    
+    // If no templates, try to seed them via API call
+    if (templates.length === 0) {
+      console.log("No templates found, attempting to seed...");
+      try {
+        // Use absolute URL in production, relative in development
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+          (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
+        const seedUrl = `${baseUrl}/api/seed`;
+        
+        console.log(`Calling seed endpoint: ${seedUrl}`);
+        const response = await fetch(seedUrl, { 
+          method: "POST",
+          cache: "no-store",
+        });
+        
+        if (response.ok) {
+          const seedData = await response.json();
+          console.log("Seed response:", seedData);
+          
+          // Retry fetching templates after seeding
+          const retryTemplates = await prisma.ruleTemplate.findMany({
+            orderBy: [{ recommended: "desc" }, { name: "asc" }],
+          });
+          console.log(`Found ${retryTemplates.length} templates after seeding`);
+          return { success: true, data: retryTemplates };
+        } else {
+          const errorData = await response.json();
+          console.error("Seed failed:", errorData);
+        }
+      } catch (seedError) {
+        console.error("Error seeding templates:", seedError);
+        // Don't fail completely, just return empty array
+      }
+    }
+
     return { success: true, data: templates };
   } catch (error) {
     console.error("Error fetching rule templates:", error);
-    return { success: false, error: "Failed to fetch rule templates" };
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return { success: false, error: `Failed to fetch rule templates: ${errorMessage}` };
   }
 }
 
@@ -251,4 +290,3 @@ export async function incrementRuleUsage(ruleId: string) {
     console.error("Error incrementing rule usage:", error);
   }
 }
-

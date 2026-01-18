@@ -42,11 +42,58 @@ export function TemplateLibrary({
 
   const loadTemplates = async () => {
     setLoading(true);
-    const result = await getRuleTemplates();
-    if (result.success && result.data) {
-      setTemplates(result.data as RuleTemplate[]);
+    try {
+      const result = await getRuleTemplates();
+      if (result.success && result.data) {
+        setTemplates(result.data as RuleTemplate[]);
+        
+        // If still no templates after auto-seed attempt, try manual seed
+        if (result.data.length === 0) {
+          console.log("No templates found after auto-seed. Attempting manual seed...");
+          try {
+            const seedResponse = await fetch("/api/seed", { method: "POST" });
+            if (seedResponse.ok) {
+              const seedData = await seedResponse.json();
+              console.log("Manual seed completed:", seedData);
+              
+              // Reload templates after seeding
+              const retryResult = await getRuleTemplates();
+              if (retryResult.success && retryResult.data) {
+                setTemplates(retryResult.data as RuleTemplate[]);
+                if (retryResult.data.length > 0) {
+                  toast.success("Templates loaded successfully", {
+                    position: "bottom-left",
+                  });
+                }
+              }
+            } else {
+              const errorData = await seedResponse.json();
+              console.error("Seed failed:", errorData);
+              toast.error("Failed to load templates. Please try refreshing the page.", {
+                position: "bottom-left",
+              });
+            }
+          } catch (seedErr) {
+            console.error("Error seeding templates:", seedErr);
+            toast.error("Failed to load templates. Please try refreshing the page.", {
+              position: "bottom-left",
+            });
+          }
+        }
+      } else {
+        console.error("Failed to load templates:", result.error);
+        toast.error(result.error || "Failed to load templates", {
+          position: "bottom-left",
+        });
+      }
+    } catch (error) {
+      console.error("Error loading templates:", error);
+      toast.error("Failed to load templates", {
+        position: "bottom-left",
+      });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleActivate = async (template: RuleTemplate) => {
@@ -85,7 +132,7 @@ export function TemplateLibrary({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onClose={() => onOpenChange(false)} className="max-w-3xl">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Rule Templates</DialogTitle>
           <DialogDescription>
@@ -93,71 +140,70 @@ export function TemplateLibrary({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[60vh] space-y-3 overflow-y-auto py-4">
-          {loading ? (
-            <div className="py-12 text-center">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
               <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent"></div>
               <p className="mt-4 text-muted-foreground">Loading templates...</p>
             </div>
-          ) : templates.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="text-muted-foreground">No templates available</p>
-            </div>
-          ) : (
-            templates.map((template) => (
-              <Card key={template.id}>
+          </div>
+        ) : templates.length === 0 ? (
+          <div className="py-12 text-center">
+            <p className="text-muted-foreground mb-4">No templates available</p>
+            <p className="text-sm text-muted-foreground mb-4">
+              Templates are being created automatically. Please refresh the page.
+            </p>
+            <Button onClick={loadTemplates} variant="outline">
+              Retry Loading Templates
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {templates.map((template) => (
+              <Card key={template.id} className="relative">
+                {template.recommended && (
+                  <div className="absolute top-4 right-4">
+                    <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
+                  </div>
+                )}
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-base">{template.name}</CardTitle>
-                        {template.recommended && (
-                          <Badge variant="warning" className="gap-1">
-                            <Star className="h-3 w-3" />
-                            Recommended
-                          </Badge>
-                        )}
-                      </div>
-                      <CardDescription className="mt-1">
-                        {template.description}
-                      </CardDescription>
+                  <CardTitle className="pr-8">{template.name}</CardTitle>
+                  <CardDescription>{template.description}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-sm font-medium">Category: </span>
+                      <Badge variant="secondary">{template.category}</Badge>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Action: </span>
+                      <Badge variant="outline">
+                        {getActionLabel(template.actions)}
+                      </Badge>
                     </div>
                     <Button
                       onClick={() => handleActivate(template)}
-                      disabled={activating !== null}
-                      size="sm"
+                      disabled={activating === template.id}
+                      className="w-full"
+                      variant="default"
                     >
                       {activating === template.id ? (
                         "Activating..."
                       ) : (
                         <>
-                          <Check className="mr-1 h-4 w-4" />
-                          Activate
+                          <Check className="mr-2 h-4 w-4" />
+                          Activate Template
                         </>
                       )}
                     </Button>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex gap-4 text-sm">
-                    <div>
-                      <span className="font-medium">Category:</span>{" "}
-                      <Badge variant="secondary">{template.category}</Badge>
-                    </div>
-                    <div>
-                      <span className="font-medium">Action:</span>{" "}
-                      <Badge variant="secondary">
-                        {getActionLabel(template.actions)}
-                      </Badge>
-                    </div>
-                  </div>
                 </CardContent>
               </Card>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
-

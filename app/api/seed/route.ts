@@ -37,8 +37,11 @@ export async function POST(request: NextRequest) {
     console.log(`✅ Organization ID: ${organization.id}`);
 
     // Create Rule Templates if they don't exist
-    const templateCount = await prisma.ruleTemplate.count();
-    if (templateCount === 0) {
+    const existingTemplateCount = await prisma.ruleTemplate.count();
+    console.log(`Found ${existingTemplateCount} existing templates`);
+    
+    let templatesCreated = false;
+    if (existingTemplateCount === 0) {
       console.log("📋 Creating rule templates...");
       await Promise.all([
         prisma.ruleTemplate.create({
@@ -89,14 +92,19 @@ export async function POST(request: NextRequest) {
           },
         }),
       ]);
+      templatesCreated = true;
+      console.log("✅ Created 3 rule templates");
+    } else {
+      console.log(`✅ Templates already exist (${existingTemplateCount} templates)`);
     }
 
     // Create Active Rules if they don't exist
-    const rulesCount = await prisma.rule.count({
+    const existingRulesCount = await prisma.rule.count({
       where: { organizationId: organization.id },
     });
 
-    if (rulesCount === 0) {
+    let rulesCreated = false;
+    if (existingRulesCount === 0) {
       console.log("⚙️ Creating active rules...");
       const templates = await prisma.ruleTemplate.findMany();
       
@@ -120,20 +128,34 @@ export async function POST(request: NextRequest) {
           createdFromTemplateId: templates[0]?.id,
         },
       });
+      rulesCreated = true;
+      console.log("✅ Created 1 active rule");
+    } else {
+      console.log(`✅ Rules already exist (${existingRulesCount} rules)`);
     }
+
+    const finalRulesCount = await prisma.rule.count({ where: { organizationId: organization.id } });
+    const finalTemplateCount = await prisma.ruleTemplate.count();
+
+    console.log(`✅ Seeding complete: ${finalTemplateCount} templates, ${finalRulesCount} rules`);
 
     return NextResponse.json({
       success: true,
       message: "Database seeded successfully",
       organizationId: organization.id,
-      rulesCount: await prisma.rule.count({ where: { organizationId: organization.id } }),
+      rulesCount: finalRulesCount,
+      templatesCount: finalTemplateCount,
+      createdTemplates: templatesCreated,
+      createdRules: rulesCreated,
     });
   } catch (error) {
     console.error("Seed error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Full error details:", errorMessage);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Seed failed",
+        error: errorMessage,
       },
       { status: 500 }
     );
@@ -156,10 +178,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const templatesCount = await prisma.ruleTemplate.count();
+    const rulesCount = await prisma.rule.count({ where: { organizationId: organization.id } });
+
     return NextResponse.json({
       success: true,
       organizationId: organization.id,
       name: organization.name,
+      templatesCount,
+      rulesCount,
     });
   } catch (error) {
     console.error("Error fetching organization:", error);
