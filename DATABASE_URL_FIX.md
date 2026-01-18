@@ -7,11 +7,13 @@ The database connection was failing with error:
 Can't reach database server at `db.typrzhuntlifvlbrqhyp.supabase.co:5432`
 ```
 
-## Root Cause
+## Root Causes
 
-The PostgreSQL password contains special characters (`+`, `@`, `$`) that **must be URL-encoded** in connection strings:
-- Password: `9+y7@tuA7ZKhM6$`
-- The `@` symbol is interpreted as the separator between credentials and host, causing the password to be truncated
+1. **Password Encoding**: The PostgreSQL password contains special characters (`+`, `@`, `$`) that **must be URL-encoded** in connection strings:
+   - Password: `9+y7@tuA7ZKhM6$`
+   - The `@` symbol is interpreted as the separator between credentials and host, causing the password to be truncated
+
+2. **SSL Requirement**: Supabase requires SSL connections. The connection string must include `?sslmode=require` parameter, otherwise connections will fail with "Can't reach database server" errors.
 
 ## Solution
 
@@ -34,8 +36,10 @@ postgresql://postgres:9+y7@tuA7ZKhM6$@db.typrzhuntlifvlbrqhyp.supabase.co:5432/p
 
 **Corrected connection string (for Vercel):**
 ```
-postgresql://postgres:9%2By7%40tuA7ZKhM6%24@db.typrzhuntlifvlbrqhyp.supabase.co:5432/postgres
+postgresql://postgres:9%2By7%40tuA7ZKhM6%24@db.typrzhuntlifvlbrqhyp.supabase.co:5432/postgres?sslmode=require
 ```
+
+**Note**: The code now automatically adds `?sslmode=require` if it's missing, so you can use either version.
 
 ### Encoding Reference
 
@@ -65,7 +69,15 @@ postgresql://postgres:9%2By7%40tuA7ZKhM6%24@db.typrzhuntlifvlbrqhyp.supabase.co:
 
 After updating, check the Vercel logs. You should see:
 - `[DEBUG] Password encoding:` log if encoding was applied
+- `[DEBUG] SSL mode added:` log if SSL parameter was added
 - Successful database connections instead of "Can't reach database server" errors
+
+## Additional Fixes Applied
+
+The code now automatically:
+1. **Encodes passwords** with special characters (`+`, `@`, `$`, etc.)
+2. **Adds SSL mode** (`?sslmode=require`) if missing (required for Supabase)
+3. **Prevents double-encoding** if password is already URL-encoded
 
 ## Additional Notes
 
