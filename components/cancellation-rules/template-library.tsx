@@ -13,13 +13,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Check, Star } from "lucide-react";
 import { getRuleTemplates, activateTemplate } from "@/app/actions/rules";
+import { getOrganizationId } from "@/app/actions/organization";
 import { toast } from "sonner";
 import type { RuleTemplate } from "@/lib/types";
 
 interface TemplateLibraryProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  organizationId: string;
+  organizationId?: string; // Optional, will be fetched if not provided
   onSuccess: () => void;
 }
 
@@ -50,7 +51,13 @@ export function TemplateLibrary({
 
   const handleActivate = async (template: RuleTemplate) => {
     setActivating(template.id);
-    const result = await activateTemplate(template.id, organizationId);
+    // Get organization ID if not provided
+    let orgId = organizationId;
+    if (!orgId) {
+      const orgResult = await getOrganizationId();
+      orgId = orgResult.organizationId || "cmkirf3lj0000jhhexsx6p1e3";
+    }
+    const result = await activateTemplate(template.id, orgId);
 
     if (result.success) {
       toast.success(`Activated: ${template.name}`, {

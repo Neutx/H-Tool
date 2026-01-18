@@ -8,11 +8,10 @@ import { ReviewQueue } from "@/components/cancellation-rules/review-queue";
 import { OrderReviewPanel } from "@/components/cancellation-rules/order-review-panel";
 import { getRules, deleteRule, toggleRuleStatus, createRule, updateRule } from "@/app/actions/rules";
 import { getReviewQueueItems } from "@/app/actions/review-queue";
+import { getOrganizationId } from "@/app/actions/organization";
 import { showUndoDeleteToast } from "@/lib/undo-delete";
 import type { Rule } from "@/lib/types";
 
-// TODO: Get organization ID from auth context/session
-const DEMO_ORG_ID = "cmkirf3lj0000jhhexsx6p1e3"; // Demo Store organization
 const DEMO_USER = "Admin User"; // TODO: Get from auth context
 
 export default function CancellationRulesPage() {
@@ -42,16 +41,50 @@ export default function CancellationRulesPage() {
   };
 
   const loadRules = async () => {
-    const result = await getRules(DEMO_ORG_ID);
-    if (result.success && result.data) {
-      setRules(result.data as Rule[]);
+    try {
+      const orgResult = await getOrganizationId();
+      const orgId = orgResult.organizationId || "cmkirf3lj0000jhhexsx6p1e3";
+      
+      const result = await getRules(orgId);
+      if (result.success && result.data) {
+        setRules(result.data as Rule[]);
+      } else {
+        console.error("Failed to load rules:", result.error);
+        // If no rules found, try seeding
+        if (result.error?.includes("not found") || (result.success && result.data?.length === 0)) {
+          console.log("No rules found, attempting to seed database...");
+          try {
+            const seedResponse = await fetch("/api/seed", { method: "POST" });
+            if (seedResponse.ok) {
+              const seedData = await seedResponse.json();
+              if (seedData.success) {
+                // Retry loading rules after seeding
+                const retryResult = await getRules(seedData.organizationId || orgId);
+                if (retryResult.success && retryResult.data) {
+                  setRules(retryResult.data as Rule[]);
+                }
+              }
+            }
+          } catch (seedErr) {
+            console.error("Error seeding database:", seedErr);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error loading rules:", error);
     }
   };
 
   const loadReviewQueue = async () => {
-    const result = await getReviewQueueItems(DEMO_ORG_ID);
-    if (result.success && result.data) {
-      setReviewQueue(result.data as any[]);
+    try {
+      const orgResult = await getOrganizationId();
+      const orgId = orgResult.organizationId || "cmkirf3lj0000jhhexsx6p1e3";
+      const result = await getReviewQueueItems(orgId);
+      if (result.success && result.data) {
+        setReviewQueue(result.data as any[]);
+      }
+    } catch (error) {
+      console.error("Error loading review queue:", error);
     }
   };
 
@@ -66,13 +99,19 @@ export default function CancellationRulesPage() {
   };
 
   const handleSaveRule = async (data: any) => {
-    if (selectedRule) {
-      await updateRule(selectedRule.id, data);
-    } else {
-      await createRule({ ...data, organizationId: DEMO_ORG_ID });
+    try {
+      const orgResult = await getOrganizationId();
+      const orgId = orgResult.organizationId || "cmkirf3lj0000jhhexsx6p1e3";
+      if (selectedRule) {
+        await updateRule(selectedRule.id, data);
+      } else {
+        await createRule({ ...data, organizationId: orgId });
+      }
+      await loadRules();
+      setRuleFormOpen(false);
+    } catch (error) {
+      console.error("Error saving rule:", error);
     }
-    await loadRules();
-    setRuleFormOpen(false);
   };
 
   const handleDeleteRule = async (ruleId: string) => {
@@ -189,7 +228,6 @@ export default function CancellationRulesPage() {
       <TemplateLibrary
         open={templateLibraryOpen}
         onOpenChange={setTemplateLibraryOpen}
-        organizationId={DEMO_ORG_ID}
         onSuccess={loadRules}
       />
 

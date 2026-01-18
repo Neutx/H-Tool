@@ -9,6 +9,16 @@ import type { CreateRuleFormData } from "@/lib/types";
  */
 export async function getRules(organizationId: string) {
   try {
+    // First, check if organization exists
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!org) {
+      console.error(`Organization ${organizationId} not found`);
+      return { success: false, error: `Organization not found. Please seed the database.` };
+    }
+
     const rules = await prisma.rule.findMany({
       where: { organizationId },
       include: {
@@ -17,10 +27,13 @@ export async function getRules(organizationId: string) {
       orderBy: { priority: "asc" },
     });
 
+    console.log(`Found ${rules.length} rules for organization ${organizationId}`);
     return { success: true, data: rules };
   } catch (error) {
     console.error("Error fetching rules:", error);
-    return { success: false, error: "Failed to fetch rules" };
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Full error details:", errorMessage);
+    return { success: false, error: `Failed to fetch rules: ${errorMessage}` };
   }
 }
 
