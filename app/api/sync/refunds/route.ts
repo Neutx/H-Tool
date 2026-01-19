@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncShopifyRefunds } from "@/lib/refund-sync-service";
 
+// Force Node.js runtime (Prisma requires Node.js, not Edge)
+export const runtime = "nodejs";
+
 // Demo organization ID
 const DEMO_ORG_ID = "cmkirf3lj0000jhhexsx6p1e3";
 
@@ -49,7 +52,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Allow manual sync via POST
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const result = await syncShopifyRefunds(DEMO_ORG_ID, 50);
 

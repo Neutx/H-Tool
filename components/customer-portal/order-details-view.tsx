@@ -1,13 +1,15 @@
 "use client";
 
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Package, Calendar, DollarSign, Mail } from "lucide-react";
+import { Calendar, DollarSign, Mail, Package } from "lucide-react";
+import type { CustomerOrder } from "@/lib/customer-portal-types";
 
 interface OrderDetailsViewProps {
-  order: any;
+  order: CustomerOrder;
   onRequestCancellation: () => void;
   onViewStatus: () => void;
 }
@@ -18,7 +20,7 @@ export function OrderDetailsView({
   onViewStatus,
 }: OrderDetailsViewProps) {
   const getOrderStatusBadge = (status: string) => {
-    const statusMap: Record<string, any> = {
+    const statusMap: Record<string, { variant: string; label: string }> = {
       pending: { variant: "warning", label: "Pending" },
       confirmed: { variant: "default", label: "Confirmed" },
       processing: { variant: "default", label: "Processing" },
@@ -30,7 +32,7 @@ export function OrderDetailsView({
   };
 
   const getCancellationStatusBadge = (status: string) => {
-    const statusMap: Record<string, any> = {
+    const statusMap: Record<string, { variant: string; label: string }> = {
       pending: { variant: "warning", label: "Pending Review" },
       approved: { variant: "success", label: "Approved" },
       processing: { variant: "default", label: "Processing" },
@@ -144,16 +146,18 @@ export function OrderDetailsView({
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {order.lineItems.map((item: any) => (
+            {order.lineItems.map((item) => (
               <div
                 key={item.id}
                 className="flex items-center justify-between rounded-lg border p-4"
               >
                 <div className="flex items-center gap-4">
                   {item.imageUrl && (
-                    <img
+                    <Image
                       src={item.imageUrl}
                       alt={item.title}
+                      width={64}
+                      height={64}
                       className="h-16 w-16 rounded-lg object-cover"
                     />
                   )}
@@ -186,7 +190,7 @@ export function OrderDetailsView({
           </CardHeader>
           <CardContent>
             <p className="mb-4 text-sm text-muted-foreground">
-              You can request a cancellation and we'll process it as quickly as
+              You can request a cancellation and we&apos;ll process it as quickly as
               possible. Depending on the order status, you may be eligible for a
               full refund.
             </p>

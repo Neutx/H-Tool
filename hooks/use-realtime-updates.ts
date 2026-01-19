@@ -11,7 +11,7 @@ interface UseRealtimeUpdatesOptions {
   cancellationRequestId?: string;
   enabled?: boolean;
   interval?: number; // ms
-  onUpdate?: (data: any) => void;
+  onUpdate?: (data: Record<string, unknown>) => void;
 }
 
 export function useRealtimeUpdates({
@@ -48,7 +48,7 @@ export function useRealtimeUpdates({
     } finally {
       setIsPolling(false);
     }
-  }, [orderId, cancellationRequestId, enabled, onUpdate]);
+  }, [orderId, cancellationRequestId, enabled]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -77,7 +77,7 @@ export function useRealtimeUpdates({
 export function useWebSocket(url: string, enabled: boolean = true) {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [lastMessage, setLastMessage] = useState<any>(null);
+  const [lastMessage, setLastMessage] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     if (!enabled || !url) return;
@@ -109,7 +109,7 @@ export function useWebSocket(url: string, enabled: boolean = true) {
     // };
   }, [url, enabled]);
 
-  const send = useCallback((data: any) => {
+  const send = useCallback((data: Record<string, unknown>) => {
     if (socket && isConnected) {
       socket.send(JSON.stringify(data));
     }

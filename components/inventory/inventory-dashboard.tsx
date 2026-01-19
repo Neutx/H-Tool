@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
+import type { Product } from "@/lib/types";
 
 interface InventoryDashboardProps {
-  products: any[];
+  products: Product[];
   metrics: {
     totalProducts: number;
     lowStockProducts: number;
@@ -32,7 +33,7 @@ export function InventoryDashboard({
   onManageRules,
   onSync,
 }: InventoryDashboardProps) {
-  const getStockStatus = (stockLevel: number, restockRule?: any) => {
+  const getStockStatus = (stockLevel: number, restockRule?: { minThreshold: number }) => {
     if (stockLevel <= 0) {
       return { variant: "error" as const, label: "Out of Stock", color: "text-red-600" };
     }
@@ -43,7 +44,7 @@ export function InventoryDashboard({
   };
 
   const getSyncStatusBadge = (status: string) => {
-    const variants: Record<string, any> = {
+    const variants: Record<string, { variant: string; label: string; icon: React.ComponentType<{ className?: string }> }> = {
       synced: { variant: "success", label: "Synced", icon: CheckCircle },
       syncing: { variant: "warning", label: "Syncing", icon: RefreshCw },
       error: { variant: "error", label: "Error", icon: AlertTriangle },
@@ -95,7 +96,7 @@ export function InventoryDashboard({
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Activity</CardTitle>
+            <CardTitle className="text-sm font-medium">Today&apos;s Activity</CardTitle>
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>

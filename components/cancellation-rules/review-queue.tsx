@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { AlertTriangle, Clock, DollarSign } from "lucide-react";
+import { Clock, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,8 +8,8 @@ import { formatDateTime, formatCurrency } from "@/lib/utils";
 import type { ReviewQueueItem } from "@/lib/types";
 
 interface ReviewQueueProps {
-  items: any[];
-  onReviewItem: (item: any) => void;
+  items: ReviewQueueItem[];
+  onReviewItem: (item: ReviewQueueItem) => void;
 }
 
 export function ReviewQueue({ items, onReviewItem }: ReviewQueueProps) {

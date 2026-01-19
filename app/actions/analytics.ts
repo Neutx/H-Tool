@@ -232,7 +232,7 @@ export async function getCancellationRecords(
   filters?: CancellationRecordFilters
 ) {
   try {
-    const where: any = {
+    const where: Record<string, unknown> = {
       organizationId,
     };
 
@@ -334,15 +334,15 @@ export async function getCancellationRecords(
         initiatedBy: record.initiatedBy as "customer" | "merchant" | "system",
         initiatedById: record.initiatedBy,
         initiatedTimestamp: record.createdAt.toISOString(),
-        reason: (record.cancellationRequest?.reasonCategory || "other") as any,
+        reason: (record.cancellationRequest?.reasonCategory || "other") as CancellationRecord["reason"],
         reasonDescription: record.reason || "",
         refundAmount: record.refundAmount,
-        refundStatus: record.refundStatus as any,
+        refundStatus: record.refundStatus as CancellationRecord["refundStatus"],
         refundTransactionId: record.refundTransactions[0]?.id || null,
-        restockDecision: record.restockDecision as any,
+        restockDecision: record.restockDecision as CancellationRecord["restockDecision"],
         customerNotified: true,
         completionTimestamp: record.completedAt?.toISOString() || null,
-        status: (record.refundStatus || "pending") as any,
+        status: (record.refundStatus || "pending") as CancellationRecord["status"],
         fraudRiskLevel,
         timeWindow,
         processingTime: record.completedAt
@@ -408,7 +408,7 @@ export async function getActivityLogs(organizationId: string, filters?: Activity
         eventType: "cancellation_requested",
         description: `Cancellation requested for order ${record.order.orderNumber}`,
         actor: record.initiatedBy === "customer" ? record.customer.name || "Customer" : "System",
-        actorType: record.initiatedBy as any,
+        actorType: record.initiatedBy as ActivityLog["actorType"],
         cancellationRecordId: record.id,
         orderNumber: record.order.orderNumber,
         customerName: record.customer.name,
@@ -586,7 +586,7 @@ export async function getCancellationTimeline(cancellationRecordId: string) {
       eventType: "request_initiated",
       description: "Cancellation request initiated",
       actor: record.customer.name || "Customer",
-      actorType: record.initiatedBy as any,
+      actorType: record.initiatedBy as TimelineEvent["actorType"],
       details: {
         orderNumber: record.order.orderNumber,
         reason: record.cancellationRequest?.reason,
@@ -684,8 +684,7 @@ export async function getCancellationTimeline(cancellationRecordId: string) {
  */
 export async function exportAnalyticsReport(
   organizationId: string,
-  format: "csv" | "pdf",
-  dateRange?: { startDate: string; endDate: string }
+  format: "csv" | "pdf"
 ) {
   try {
     // This would generate a CSV or PDF report

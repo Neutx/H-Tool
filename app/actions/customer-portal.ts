@@ -109,7 +109,7 @@ export async function getCancellationStatus(cancellationRequestId: string) {
     }
 
     // Build timeline
-    const timeline: any = {
+    const timeline: Record<string, Date> = {
       requested: request.createdAt,
     };
 

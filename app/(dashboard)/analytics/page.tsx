@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AnalyticsDashboard } from "@/components/analytics/analytics-dashboard";
 import {
   getAnalyticsMetrics,
@@ -30,7 +30,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
 
   // Fetch all data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [metricsResult, recordsResult, logsResult, alertsResult] = await Promise.all([
@@ -57,11 +57,11 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange, compareEnabled]);
 
   useEffect(() => {
     fetchData();
-  }, [timeRange, compareEnabled]);
+  }, [fetchData]);
 
   const handleTimeRangeChange = (range: TimeRange) => {
     setTimeRange(range);

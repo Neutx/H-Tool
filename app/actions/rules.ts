@@ -1,134 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { CreateRuleFormData } from "@/lib/types";
-
-/**
- * Seed templates and rules (internal helper)
- */
-async function seedTemplatesAndRules(organizationId: string) {
-  try {
-    // Create Rule Templates if they don't exist
-    const existingTemplateCount = await prisma.ruleTemplate.count();
-    
-    if (existingTemplateCount === 0) {
-      console.log("📋 Creating rule templates...");
-      await Promise.all([
-        prisma.ruleTemplate.create({
-          data: {
-            name: "Auto-approve within 15 min",
-            description: "Automatically approve cancellations requested within 15 minutes of order placement",
-            category: "time_based",
-            conditions: {
-              timeWindow: 15,
-              orderStatus: ["open", "pending"],
-              fulfillmentStatus: ["unfulfilled"],
-            },
-            actions: {
-              type: "auto_approve",
-              notifyCustomer: true,
-            },
-            recommended: true,
-          },
-        }),
-        prisma.ruleTemplate.create({
-          data: {
-            name: "Flag high-risk orders",
-            description: "Send high-risk cancellation requests to manual review",
-            category: "risk_based",
-            conditions: {
-              riskLevel: ["high"],
-            },
-            actions: {
-              type: "manual_review",
-              notifyMerchant: true,
-            },
-            recommended: true,
-          },
-        }),
-        prisma.ruleTemplate.create({
-          data: {
-            name: "Deny if already fulfilled",
-            description: "Automatically deny cancellations for already fulfilled orders",
-            category: "status_based",
-            conditions: {
-              fulfillmentStatus: ["fulfilled"],
-            },
-            actions: {
-              type: "deny",
-              notifyCustomer: true,
-            },
-            recommended: true,
-          },
-        }),
-      ]);
-      console.log("✅ Created 3 rule templates");
-    }
-
-    // Create Active Rules if they don't exist
-    const existingRulesCount = await prisma.rule.count({
-      where: { organizationId },
-    });
-
-    if (existingRulesCount === 0) {
-      console.log("⚙️ Creating active rules...");
-      const templates = await prisma.ruleTemplate.findMany();
-      
-      await prisma.rule.create({
-        data: {
-          name: "Auto-approve within 15 min",
-          description: "Automatically approve cancellations within 15 minutes",
-          organizationId,
-          conditions: {
-            timeWindow: 15,
-            orderStatus: ["open", "pending"],
-            fulfillmentStatus: ["unfulfilled"],
-          },
-          actions: {
-            type: "auto_approve",
-            notifyCustomer: true,
-          },
-          priority: 1,
-          active: true,
-          usageCount: 0,
-          createdFromTemplateId: templates[0]?.id,
-        },
-      });
-      console.log("✅ Created 1 active rule");
-    }
-  } catch (error) {
-    console.error("Error seeding templates and rules:", error);
-    throw error;
-  }
-}
 
 /**
  * Get all rules for an organization
  */
 export async function getRules(organizationId: string) {
-  // #region agent log
-  fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/rules.ts:45',message:'getRules called',data:{organizationId,hasDatabaseUrl:!!process.env.DATABASE_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-  // #endregion
   try {
-    // First, check if organization exists
-    // #region agent log
-    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/rules.ts:49',message:'Before prisma.organization.findUnique',data:{organizationId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-    
-    const org = await prisma.organization.findUnique({
-      where: { id: organizationId },
-    });
-
-    // #region agent log
-    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/rules.ts:55',message:'After prisma.organization.findUnique',data:{foundOrg:!!org},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-
-    if (!org) {
-      console.error(`Organization ${organizationId} not found`);
-      return { success: false, error: `Organization not found. Please seed the database.` };
-    }
-
     const rules = await prisma.rule.findMany({
       where: { organizationId },
       include: {
@@ -137,19 +18,10 @@ export async function getRules(organizationId: string) {
       orderBy: { priority: "asc" },
     });
 
-    console.log(`Found ${rules.length} rules for organization ${organizationId}`);
     return { success: true, data: rules };
   } catch (error) {
     console.error("Error fetching rules:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    const errorName = error instanceof Error ? error.name : "Unknown";
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/rules.ts:67',message:'getRules error caught',data:{errorName,errorMessage,hasDatabaseUrl:!!process.env.DATABASE_URL,errorMessageIncludesDatabase:errorMessage.includes('database')||errorMessage.includes('DATABASE')||errorMessage.includes('Can\'t reach')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-    
-    console.error("Full error details:", errorMessage);
-    return { success: false, error: `Failed to fetch rules: ${errorMessage}` };
+    return { success: false, error: "Failed to fetch rules" };
   }
 }
 
@@ -184,8 +56,8 @@ export async function createRule(data: CreateRuleFormData & { organizationId: st
         name: data.name,
         description: data.description,
         organizationId: data.organizationId,
-        conditions: data.conditions as any,
-        actions: data.actions as any,
+        conditions: data.conditions as Prisma.JsonValue,
+        actions: data.actions as Prisma.JsonValue,
         priority: data.priority ?? 0,
         active: data.active ?? true,
       },
@@ -212,8 +84,8 @@ export async function updateRule(
       data: {
         ...(data.name && { name: data.name }),
         ...(data.description !== undefined && { description: data.description }),
-        ...(data.conditions && { conditions: data.conditions as any }),
-        ...(data.actions && { actions: data.actions as any }),
+        ...(data.conditions && { conditions: data.conditions as Prisma.JsonValue }),
+        ...(data.actions && { actions: data.actions as Prisma.JsonValue }),
         ...(data.priority !== undefined && { priority: data.priority }),
         ...(data.active !== undefined && { active: data.active }),
       },
@@ -294,7 +166,6 @@ export async function reorderRules(
 
 /**
  * Get all rule templates
- * Auto-seeds templates if none exist
  */
 export async function getRuleTemplates() {
   try {
@@ -302,47 +173,10 @@ export async function getRuleTemplates() {
       orderBy: [{ recommended: "desc" }, { name: "asc" }],
     });
 
-    console.log(`Found ${templates.length} rule templates`);
-    
-    // If no templates, try to seed them
-    if (templates.length === 0) {
-      console.log("No templates found, attempting to seed...");
-      try {
-        // Get or create organization first
-        let organization = await prisma.organization.findFirst({
-          where: { name: "Demo Store" },
-        });
-
-        if (!organization) {
-          organization = await prisma.organization.create({
-            data: {
-              name: "Demo Store",
-              shopifyStoreUrl: "demo-store.myshopify.com",
-              hasShopifyDomain: true,
-            },
-          });
-        }
-
-        // Seed templates and rules
-        await seedTemplatesAndRules(organization.id);
-        
-        // Retry fetching templates after seeding
-        const retryTemplates = await prisma.ruleTemplate.findMany({
-          orderBy: [{ recommended: "desc" }, { name: "asc" }],
-        });
-        console.log(`Found ${retryTemplates.length} templates after seeding`);
-        return { success: true, data: retryTemplates };
-      } catch (seedError) {
-        console.error("Error seeding templates:", seedError);
-        // Don't fail completely, just return empty array
-      }
-    }
-
     return { success: true, data: templates };
   } catch (error) {
     console.error("Error fetching rule templates:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return { success: false, error: `Failed to fetch rule templates: ${errorMessage}` };
+    return { success: false, error: "Failed to fetch rule templates" };
   }
 }
 
@@ -376,8 +210,8 @@ export async function activateTemplate(
         name: customizations?.name ?? template.name,
         description: customizations?.description ?? template.description,
         organizationId,
-        conditions: (customizations?.conditions ?? template.conditions) as any,
-        actions: (customizations?.actions ?? template.actions) as any,
+        conditions: (customizations?.conditions ?? template.conditions) as Prisma.JsonValue,
+        actions: (customizations?.actions ?? template.actions) as Prisma.JsonValue,
         priority: customizations?.priority ?? nextPriority,
         active: customizations?.active ?? true,
         createdFromTemplateId: templateId,
@@ -405,3 +239,4 @@ export async function incrementRuleUsage(ruleId: string) {
     console.error("Error incrementing rule usage:", error);
   }
 }
+

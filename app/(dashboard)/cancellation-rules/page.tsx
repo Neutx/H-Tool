@@ -8,16 +8,16 @@ import { ReviewQueue } from "@/components/cancellation-rules/review-queue";
 import { OrderReviewPanel } from "@/components/cancellation-rules/order-review-panel";
 import { getRules, deleteRule, toggleRuleStatus, createRule, updateRule } from "@/app/actions/rules";
 import { getReviewQueueItems } from "@/app/actions/review-queue";
-import { getOrganizationId } from "@/app/actions/organization";
 import { showUndoDeleteToast } from "@/lib/undo-delete";
-import { toast } from "sonner";
-import type { Rule } from "@/lib/types";
+import type { Rule, ReviewQueueItem, CreateRuleFormData } from "@/lib/types";
 
+// TODO: Get organization ID from auth context/session
+const DEMO_ORG_ID = "cmkirf3lj0000jhhexsx6p1e3"; // Demo Store organization
 const DEMO_USER = "Admin User"; // TODO: Get from auth context
 
 export default function CancellationRulesPage() {
   const [rules, setRules] = useState<Rule[]>([]);
-  const [reviewQueue, setReviewQueue] = useState<any[]>([]);
+  const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal states
@@ -26,14 +26,23 @@ export default function CancellationRulesPage() {
   const [reviewPanelOpen, setReviewPanelOpen] = useState(false);
 
   const [selectedRule, setSelectedRule] = useState<Rule | null>(null);
-  const [selectedReviewItem, setSelectedReviewItem] = useState<any | null>(null);
+  const [selectedReviewItem, setSelectedReviewItem] = useState<ReviewQueueItem | null>(null);
 
   const [deletedRules, setDeletedRules] = useState<Map<string, Rule>>(new Map());
 
-  // Fetch data on mount
-  useEffect(() => {
-    loadData();
-  }, []);
+  const loadRules = async () => {
+    const result = await getRules(DEMO_ORG_ID);
+    if (result.success && result.data) {
+      setRules(result.data as Rule[]);
+    }
+  };
+
+  const loadReviewQueue = async () => {
+    const result = await getReviewQueueItems(DEMO_ORG_ID);
+    if (result.success && result.data) {
+      setReviewQueue(result.data as ReviewQueueItem[]);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -41,97 +50,12 @@ export default function CancellationRulesPage() {
     setLoading(false);
   };
 
-  const seedDatabase = async (orgId?: string) => {
-    try {
-      console.log("Calling seed endpoint...");
-      const seedResponse = await fetch("/api/seed", { method: "POST" });
-      if (seedResponse.ok) {
-        const seedData = await seedResponse.json();
-        console.log("Seed response:", seedData);
-        if (seedData.success) {
-          toast.success(
-            `Database seeded: ${seedData.templatesCount} templates, ${seedData.rulesCount} rules`,
-            { position: "bottom-left" }
-          );
-          return seedData.organizationId || orgId;
-        }
-      } else {
-        const errorData = await seedResponse.json();
-        console.error("Seed failed:", errorData);
-        toast.error(`Seed failed: ${errorData.error}`, {
-          position: "bottom-left",
-        });
-      }
-    } catch (seedErr) {
-      console.error("Error seeding database:", seedErr);
-      toast.error("Failed to seed database", {
-        position: "bottom-left",
-      });
-    }
-    return orgId;
-  };
+  // Fetch data on mount
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const loadRules = async () => {
-    try {
-      const orgResult = await getOrganizationId();
-      const orgId = orgResult.organizationId || "cmkirf3lj0000jhhexsx6p1e3";
-      
-      console.log(`Loading rules for organization: ${orgId}`);
-      const result = await getRules(orgId);
-      
-      if (result.success && result.data) {
-        console.log(`Loaded ${result.data.length} rules`);
-        setRules(result.data as Rule[]);
-        
-        // If no rules found, try seeding
-        if (result.data.length === 0) {
-          console.log("No rules found, attempting to seed database...");
-          const seededOrgId = await seedDatabase(orgId);
-          if (seededOrgId) {
-            // Retry loading rules after seeding
-            const retryResult = await getRules(seededOrgId);
-            if (retryResult.success && retryResult.data) {
-              console.log(`Loaded ${retryResult.data.length} rules after seeding`);
-              setRules(retryResult.data as Rule[]);
-            }
-          }
-        }
-      } else {
-        console.error("Failed to load rules:", result.error);
-        // Try seeding if organization not found
-        if (result.error?.includes("not found")) {
-          const seededOrgId = await seedDatabase();
-          if (seededOrgId) {
-            const retryResult = await getRules(seededOrgId);
-            if (retryResult.success && retryResult.data) {
-              setRules(retryResult.data as Rule[]);
-            }
-          }
-        } else {
-          toast.error(result.error || "Failed to load rules", {
-            position: "bottom-left",
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Error loading rules:", error);
-      // Last resort: try seeding
-      await seedDatabase();
-    }
-  };
-
-  const loadReviewQueue = async () => {
-    try {
-      const orgResult = await getOrganizationId();
-      const orgId = orgResult.organizationId || "cmkirf3lj0000jhhexsx6p1e3";
-      const result = await getReviewQueueItems(orgId);
-      if (result.success && result.data) {
-        setReviewQueue(result.data as any[]);
-      }
-    } catch (error) {
-      console.error("Error loading review queue:", error);
-    }
-  };
 
   const handleCreateRule = () => {
     setSelectedRule(null);
@@ -143,26 +67,14 @@ export default function CancellationRulesPage() {
     setRuleFormOpen(true);
   };
 
-  const handleSaveRule = async (data: any) => {
-    try {
-      const orgResult = await getOrganizationId();
-      const orgId = orgResult.organizationId || "cmkirf3lj0000jhhexsx6p1e3";
-      if (selectedRule) {
-        await updateRule(selectedRule.id, data);
-      } else {
-        await createRule({ ...data, organizationId: orgId });
-      }
-      await loadRules();
-      setRuleFormOpen(false);
-      toast.success(selectedRule ? "Rule updated" : "Rule created", {
-        position: "bottom-left",
-      });
-    } catch (error) {
-      console.error("Error saving rule:", error);
-      toast.error("Failed to save rule", {
-        position: "bottom-left",
-      });
+  const handleSaveRule = async (data: CreateRuleFormData) => {
+    if (selectedRule) {
+      await updateRule(selectedRule.id, data);
+    } else {
+      await createRule({ ...data, organizationId: DEMO_ORG_ID });
     }
+    await loadRules();
+    setRuleFormOpen(false);
   };
 
   const handleDeleteRule = async (ruleId: string) => {
@@ -218,7 +130,7 @@ export default function CancellationRulesPage() {
     setTemplateLibraryOpen(true);
   };
 
-  const handleReviewItem = (item: any) => {
+  const handleReviewItem = (item: ReviewQueueItem) => {
     setSelectedReviewItem(item);
     setReviewPanelOpen(true);
   };
@@ -279,6 +191,7 @@ export default function CancellationRulesPage() {
       <TemplateLibrary
         open={templateLibraryOpen}
         onOpenChange={setTemplateLibraryOpen}
+        organizationId={DEMO_ORG_ID}
         onSuccess={loadRules}
       />
 

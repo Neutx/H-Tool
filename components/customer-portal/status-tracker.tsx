@@ -4,11 +4,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDateTime, formatCurrency } from "@/lib/utils";
-import { CheckCircle, Clock, XCircle, AlertCircle, Package } from "lucide-react";
+import { CheckCircle, Clock, XCircle, AlertCircle } from "lucide-react";
+import type { CustomerOrder } from "@/lib/customer-portal-types";
+
+interface CancellationStatusData {
+  id: string;
+  status: string;
+  reason: string | null;
+  reasonCategory: string | null;
+  customerNotes: string | null;
+  adminResponse: string | null;
+  refundPreference: string;
+  createdAt: Date;
+  updatedAt: Date;
+  timeline: Record<string, Date>;
+  refundAmount: number;
+  refundStatus: string | null;
+}
 
 interface StatusTrackerProps {
-  status: any;
-  order: any;
+  status: CancellationStatusData;
+  order: CustomerOrder;
   onBack: () => void;
 }
 
@@ -27,7 +43,7 @@ export function StatusTracker({ status, order, onBack }: StatusTrackerProps) {
   };
 
   const getStatusBadge = (statusValue: string) => {
-    const statusMap: Record<string, any> = {
+    const statusMap: Record<string, { variant: string; label: string }> = {
       pending: { variant: "warning", label: "Pending Review" },
       approved: { variant: "success", label: "Approved" },
       processing: { variant: "default", label: "Processing" },

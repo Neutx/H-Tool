@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { unicommerce } from "@/lib/unicommerce";
 import { shopify } from "@/lib/shopify";
 import {
-  evaluateRestockNeed,
   processCancellationRestock,
   validateRestockRule,
 } from "@/lib/restock-engine";

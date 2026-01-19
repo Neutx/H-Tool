@@ -14,12 +14,28 @@ import {
   deleteRestockRule,
   syncWithUnicommerce,
 } from "@/app/actions/inventory";
+import type { Product, ProductRestockRule } from "@/lib/types";
 
 const DEMO_ORG_ID = "cmkirf3lj0000jhhexsx6p1e3";
 
+type ProductWithRestockRule = Product & {
+  restockRule: ProductRestockRule | null;
+};
+
+type InventoryMetrics = {
+  totalProducts: number;
+  lowStockProducts: number;
+  outOfStockProducts: number;
+  totalValue: number;
+  restocksToday: number;
+  adjustmentsToday: number;
+  syncStatus: string;
+  lastSyncAt: Date | null;
+};
+
 export default function InventoryPage() {
-  const [products, setProducts] = useState<any[]>([]);
-  const [metrics, setMetrics] = useState<any>({
+  const [products, setProducts] = useState<ProductWithRestockRule[]>([]);
+  const [metrics, setMetrics] = useState<InventoryMetrics>({
     totalProducts: 0,
     lowStockProducts: 0,
     outOfStockProducts: 0,
@@ -27,6 +43,7 @@ export default function InventoryPage() {
     restocksToday: 0,
     adjustmentsToday: 0,
     syncStatus: "synced",
+    lastSyncAt: null,
   });
   const [loading, setLoading] = useState(true);
 
@@ -34,11 +51,21 @@ export default function InventoryPage() {
   const [restockModalOpen, setRestockModalOpen] = useState(false);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductWithRestockRule | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const loadProducts = async () => {
+    const result = await getProductsWithStock(DEMO_ORG_ID);
+    if (result.success && result.data) {
+      setProducts(result.data as ProductWithRestockRule[]);
+    }
+  };
+
+  const loadMetrics = async () => {
+    const result = await getInventoryMetrics(DEMO_ORG_ID);
+    if (result.success && result.data) {
+      setMetrics(result.data as InventoryMetrics);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -46,19 +73,11 @@ export default function InventoryPage() {
     setLoading(false);
   };
 
-  const loadProducts = async () => {
-    const result = await getProductsWithStock(DEMO_ORG_ID);
-    if (result.success && result.data) {
-      setProducts(result.data as any[]);
-    }
-  };
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const loadMetrics = async () => {
-    const result = await getInventoryMetrics(DEMO_ORG_ID);
-    if (result.success && result.data) {
-      setMetrics(result.data);
-    }
-  };
 
   const handleRestock = (productId: string) => {
     const product = products.find((p) => p.id === productId);
@@ -85,14 +104,14 @@ export default function InventoryPage() {
   };
 
   const handleSync = async () => {
-    setMetrics((prev: any) => ({ ...prev, syncStatus: "syncing" }));
+    setMetrics((prev) => ({ ...prev, syncStatus: "syncing" }));
 
     const result = await syncWithUnicommerce(DEMO_ORG_ID);
 
     if (result.success) {
       await loadData();
     } else {
-      setMetrics((prev: any) => ({ ...prev, syncStatus: "error" }));
+      setMetrics((prev) => ({ ...prev, syncStatus: "error" }));
     }
   };
 

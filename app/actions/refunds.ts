@@ -137,7 +137,7 @@ export async function processRefund(data: {
 
     switch (data.refundType) {
       case "full":
-        calculation = calculateFullRefund(order as any);
+        calculation = calculateFullRefund(order);
         refundAmount = calculation.totalRefund;
         break;
 
@@ -148,7 +148,7 @@ export async function processRefund(data: {
             error: "Selected items required for partial refund",
           };
         }
-        calculation = calculatePartialRefund(order as any, data.selectedItems);
+        calculation = calculatePartialRefund(order, data.selectedItems);
         refundAmount = calculation.totalRefund;
         break;
 
@@ -158,7 +158,7 @@ export async function processRefund(data: {
 
       default:
         if (data.customAmount) {
-          calculation = calculateCustomRefund(order as any, data.customAmount);
+          calculation = calculateCustomRefund(order, data.customAmount);
           refundAmount = data.customAmount;
         } else {
           return { success: false, error: "Invalid refund type" };
@@ -167,7 +167,7 @@ export async function processRefund(data: {
 
     // Validate refund amount
     if (refundAmount > 0) {
-      const validation = validateRefundAmount(refundAmount, order as any);
+      const validation = validateRefundAmount(refundAmount, order);
       if (!validation.valid) {
         return { success: false, error: validation.error };
       }

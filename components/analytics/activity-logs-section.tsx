@@ -39,12 +39,12 @@ export function ActivityLogsSection({ activityLogs }: ActivityLogsSectionProps) 
   };
 
   const getActorBadge = (actorType: "customer" | "merchant" | "system") => {
-    const variants = {
+    const variants: Record<"customer" | "merchant" | "system", "default" | "secondary"> = {
       customer: "default",
       merchant: "secondary",
       system: "secondary",
     };
-    return <Badge variant={variants[actorType] as any}>{actorType}</Badge>;
+    return <Badge variant={variants[actorType]}>{actorType}</Badge>;
   };
 
   if (activityLogs.length === 0) {

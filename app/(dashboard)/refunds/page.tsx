@@ -13,12 +13,22 @@ import {
   syncRefundsFromShopify,
 } from "@/app/actions/refunds";
 import { toast } from "sonner";
+import type { RefundTransaction } from "@/lib/types";
 
 const DEMO_ORG_ID = "cmkirf3lj0000jhhexsx6p1e3";
 
+type RefundMetrics = {
+  totalRefunds: number;
+  pendingRefunds: number;
+  completedRefunds: number;
+  failedRefunds: number;
+  totalRefunded: number;
+  successRate: number;
+};
+
 export default function RefundsPage() {
-  const [refunds, setRefunds] = useState<any[]>([]);
-  const [metrics, setMetrics] = useState<any>({
+  const [refunds, setRefunds] = useState<RefundTransaction[]>([]);
+  const [metrics, setMetrics] = useState<RefundMetrics>({
     totalRefunds: 0,
     pendingRefunds: 0,
     completedRefunds: 0,
@@ -32,14 +42,23 @@ export default function RefundsPage() {
   // Modal states
   const [processModalOpen, setProcessModalOpen] = useState(false);
   const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
-  const [selectedRefund, setSelectedRefund] = useState<any | null>(null);
-  const [selectedCancellationRequestId, setSelectedCancellationRequestId] =
+  const [selectedRefund, setSelectedRefund] = useState<RefundTransaction | null>(null);
+  const [selectedCancellationRequestId] =
     useState<string>("");
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const loadRefunds = async () => {
+    const result = await getRefunds(DEMO_ORG_ID);
+    if (result.success && result.data) {
+      setRefunds(result.data as RefundTransaction[]);
+    }
+  };
+
+  const loadMetrics = async () => {
+    const result = await getRefundMetrics(DEMO_ORG_ID);
+    if (result.success && result.data) {
+      setMetrics(result.data as RefundMetrics);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -47,19 +66,11 @@ export default function RefundsPage() {
     setLoading(false);
   };
 
-  const loadRefunds = async () => {
-    const result = await getRefunds(DEMO_ORG_ID);
-    if (result.success && result.data) {
-      setRefunds(result.data as any[]);
-    }
-  };
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const loadMetrics = async () => {
-    const result = await getRefundMetrics(DEMO_ORG_ID);
-    if (result.success && result.data) {
-      setMetrics(result.data);
-    }
-  };
 
   const handleProcessRefund = (orderId: string) => {
     // TODO: Get order details and cancellation request ID
@@ -135,7 +146,7 @@ export default function RefundsPage() {
       <ProcessRefundModal
         open={processModalOpen}
         onOpenChange={setProcessModalOpen}
-        order={selectedOrder}
+        order={null}
         cancellationRequestId={selectedCancellationRequestId}
         onSuccess={loadData}
         onProcess={processRefund}

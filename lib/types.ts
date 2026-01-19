@@ -13,9 +13,9 @@ export type Order = Prisma.OrderGetPayload<{
   include: { lineItems: true; customer: true };
 }>;
 
-export type LineItem = Prisma.LineItemGetPayload<{}>;
+export type LineItem = Prisma.LineItemGetPayload<Record<string, never>>;
 
-export type Customer = Prisma.CustomerGetPayload<{}>;
+export type Customer = Prisma.CustomerGetPayload<Record<string, never>>;
 
 export type CancellationRequest = Prisma.CancellationRequestGetPayload<{
   include: { order: true; customer: true };
@@ -33,11 +33,11 @@ export type InventoryAdjustment = Prisma.InventoryAdjustmentGetPayload<{
   include: { product: true };
 }>;
 
-export type Product = Prisma.ProductGetPayload<{}>;
+export type Product = Prisma.ProductGetPayload<Record<string, never>>;
 
-export type Rule = Prisma.RuleGetPayload<{}>;
+export type Rule = Prisma.RuleGetPayload<Record<string, never>>;
 
-export type RuleTemplate = Prisma.RuleTemplateGetPayload<{}>;
+export type RuleTemplate = Prisma.RuleTemplateGetPayload<Record<string, never>>;
 
 export type ReviewQueueItem = Prisma.ReviewQueueItemGetPayload<{
   include: { order: true; cancellationRequest: true };
@@ -47,9 +47,9 @@ export type ProductRestockRule = Prisma.ProductRestockRuleGetPayload<{
   include: { product: true };
 }>;
 
-export type Integration = Prisma.IntegrationGetPayload<{}>;
+export type Integration = Prisma.IntegrationGetPayload<Record<string, never>>;
 
-export type IntegrationSync = Prisma.IntegrationSyncGetPayload<{}>;
+export type IntegrationSync = Prisma.IntegrationSyncGetPayload<Record<string, never>>;
 
 export type FailedSync = Prisma.FailedSyncGetPayload<{
   include: { product: true; integration: true };
@@ -59,9 +59,9 @@ export type OrderStatusUpdate = Prisma.OrderStatusUpdateGetPayload<{
   include: { order: true };
 }>;
 
-export type User = Prisma.UserGetPayload<{}>;
+export type User = Prisma.UserGetPayload<Record<string, never>>;
 
-export type Organization = Prisma.OrganizationGetPayload<{}>;
+export type Organization = Prisma.OrganizationGetPayload<Record<string, never>>;
 
 export type TeamMember = Prisma.TeamMemberGetPayload<{
   include: { user: true };
@@ -281,14 +281,14 @@ export interface CancellationRequestFormData {
 
 export interface WebSocketMessage {
   type: "cancellation_status_update" | "order_status_update" | "notification";
-  payload: any;
+  payload: Record<string, unknown>;
 }
 
 export interface CancellationStatusUpdate {
   cancellationRequestId: string;
   status: CancellationStatus;
   timestamp: Date;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 // ============================================

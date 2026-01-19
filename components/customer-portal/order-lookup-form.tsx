@@ -7,10 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Search } from "lucide-react";
 import { toast } from "sonner";
+import type { CustomerOrder } from "@/lib/customer-portal-types";
 
 interface OrderLookupFormProps {
-  onLookup: (orderNumber: string, email: string) => Promise<any>;
-  onSuccess: (order: any) => void;
+  onLookup: (orderNumber: string, email: string) => Promise<{ success: boolean; data?: CustomerOrder; error?: string }>;
+  onSuccess: (order: CustomerOrder) => void;
 }
 
 export function OrderLookupForm({ onLookup, onSuccess }: OrderLookupFormProps) {

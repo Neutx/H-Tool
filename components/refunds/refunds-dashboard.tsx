@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
+import type { RefundTransaction } from "@/lib/types";
 
 interface RefundsDashboardProps {
-  refunds: any[];
+  refunds: RefundTransaction[];
   metrics: {
     totalRefunds: number;
     pendingRefunds: number;
@@ -26,14 +27,13 @@ interface RefundsDashboardProps {
 export function RefundsDashboard({
   refunds,
   metrics,
-  onProcessRefund,
   onViewDetails,
   onRetryRefund,
   onSyncRefunds,
   isSyncing = false,
 }: RefundsDashboardProps) {
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, any> = {
+    const variants: Record<string, { variant: string; label: string }> = {
       pending: { variant: "warning", label: "Pending" },
       processing: { variant: "warning", label: "Processing" },
       completed: { variant: "success", label: "Completed" },

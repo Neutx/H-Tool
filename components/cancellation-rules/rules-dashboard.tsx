@@ -16,7 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
-import type { Rule } from "@/lib/types";
+import type { Rule, RuleActions } from "@/lib/types";
+import { Prisma } from "@prisma/client";
 
 interface RulesDashboardProps {
   rules: Rule[];
@@ -53,26 +54,28 @@ export function RulesDashboard({
     return matchesSearch && matchesStatus;
   });
 
-  const getActionLabel = (actions: any): string => {
-    if (!actions || !actions.type) return "Unknown";
+  const getActionLabel = (actions: RuleActions | Prisma.JsonValue): string => {
+    const actionsObj = actions as RuleActions;
+    if (!actionsObj || !actionsObj.type) return "Unknown";
     const actionMap: Record<string, string> = {
       auto_approve: "Auto-approve",
       manual_review: "Manual review",
       deny: "Deny",
       escalate: "Escalate",
     };
-    return actionMap[actions.type] || actions.type;
+    return actionMap[actionsObj.type] || actionsObj.type;
   };
 
-  const getActionColor = (actions: any): "success" | "warning" | "error" | "secondary" => {
-    if (!actions || !actions.type) return "secondary";
+  const getActionColor = (actions: RuleActions | Prisma.JsonValue): "success" | "warning" | "error" | "secondary" => {
+    const actionsObj = actions as RuleActions;
+    if (!actionsObj || !actionsObj.type) return "secondary";
     const colorMap: Record<string, "success" | "warning" | "error" | "secondary"> = {
       auto_approve: "success",
       manual_review: "warning",
       deny: "error",
       escalate: "warning",
     };
-    return colorMap[actions.type] || "secondary";
+    return colorMap[actionsObj.type] || "secondary";
   };
 
   return (

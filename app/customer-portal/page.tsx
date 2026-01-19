@@ -10,13 +10,29 @@ import {
   submitCancellationRequest,
   getCancellationStatus,
 } from "@/app/actions/customer-portal";
+import type { CustomerOrder } from "@/lib/customer-portal-types";
 
 type View = "lookup" | "order" | "request" | "status";
 
+type CancellationStatusData = {
+  id: string;
+  status: string;
+  reason: string | null;
+  reasonCategory: string | null;
+  customerNotes: string | null;
+  adminResponse: string | null;
+  refundPreference: string;
+  createdAt: Date;
+  updatedAt: Date;
+  timeline: Record<string, Date>;
+  refundAmount: number;
+  refundStatus: string | null;
+};
+
 export default function CustomerPortalPage() {
   const [view, setView] = useState<View>("lookup");
-  const [order, setOrder] = useState<any | null>(null);
-  const [cancellationStatus, setCancellationStatus] = useState<any | null>(null);
+  const [order, setOrder] = useState<CustomerOrder | null>(null);
+  const [cancellationStatus, setCancellationStatus] = useState<CancellationStatusData | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Check if there's a stored order in session storage
@@ -24,20 +40,23 @@ export default function CustomerPortalPage() {
     const storedOrder = sessionStorage.getItem("portal_order");
     if (storedOrder) {
       try {
-        const parsedOrder = JSON.parse(storedOrder);
-        setOrder(parsedOrder);
-        setView("order");
+        const parsedOrder = JSON.parse(storedOrder) as CustomerOrder;
+        // Use setTimeout to avoid calling setState synchronously in effect
+        setTimeout(() => {
+          setOrder(parsedOrder);
+          setView("order");
+        }, 0);
       } catch {
         sessionStorage.removeItem("portal_order");
       }
     }
   }, []);
 
-  const handleOrderLookup = async (order: any) => {
-    setOrder(order);
+  const handleOrderLookup = async (orderData: CustomerOrder) => {
+    setOrder(orderData);
     setView("order");
     // Store in session storage
-    sessionStorage.setItem("portal_order", JSON.stringify(order));
+    sessionStorage.setItem("portal_order", JSON.stringify(orderData));
   };
 
   const handleRequestCancellation = () => {
