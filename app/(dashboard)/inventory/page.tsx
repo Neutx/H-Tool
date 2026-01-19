@@ -14,9 +14,8 @@ import {
   deleteRestockRule,
   syncWithUnicommerce,
 } from "@/app/actions/inventory";
+import { useOrganization } from "@/hooks/use-auth";
 import type { Product, ProductRestockRule } from "@/lib/types";
-
-const DEMO_ORG_ID = "cmkirf3lj0000jhhexsx6p1e3";
 
 type ProductWithRestockRule = Product & {
   restockRule: ProductRestockRule | null;
@@ -34,6 +33,8 @@ type InventoryMetrics = {
 };
 
 export default function InventoryPage() {
+  const { organization } = useOrganization();
+  const organizationId = organization?.id;
   const [products, setProducts] = useState<ProductWithRestockRule[]>([]);
   const [metrics, setMetrics] = useState<InventoryMetrics>({
     totalProducts: 0,
@@ -53,20 +54,23 @@ export default function InventoryPage() {
   const [selectedProduct, setSelectedProduct] = useState<ProductWithRestockRule | null>(null);
 
   const loadProducts = async () => {
-    const result = await getProductsWithStock(DEMO_ORG_ID);
+    if (!organizationId) return;
+    const result = await getProductsWithStock(organizationId);
     if (result.success && result.data) {
       setProducts(result.data as ProductWithRestockRule[]);
     }
   };
 
   const loadMetrics = async () => {
-    const result = await getInventoryMetrics(DEMO_ORG_ID);
+    if (!organizationId) return;
+    const result = await getInventoryMetrics(organizationId);
     if (result.success && result.data) {
       setMetrics(result.data as InventoryMetrics);
     }
   };
 
   const loadData = async () => {
+    if (!organizationId) return;
     setLoading(true);
     await Promise.all([loadProducts(), loadMetrics()]);
     setLoading(false);
@@ -75,7 +79,7 @@ export default function InventoryPage() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [organizationId]);
 
 
   const handleRestock = (productId: string) => {
@@ -103,9 +107,10 @@ export default function InventoryPage() {
   };
 
   const handleSync = async () => {
+    if (!organizationId) return;
     setMetrics((prev) => ({ ...prev, syncStatus: "syncing" }));
 
-    const result = await syncWithUnicommerce(DEMO_ORG_ID);
+    const result = await syncWithUnicommerce(organizationId);
 
     if (result.success) {
       await loadData();

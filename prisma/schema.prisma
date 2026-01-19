@@ -14,6 +14,7 @@ model Organization {
   shopifyStoreUrl      String?
   websiteUrl           String?
   hasShopifyDomain     Boolean               @default(true)
+  ownerId              String?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   cancellationRecords  CancellationRecord[]
@@ -24,33 +25,44 @@ model Organization {
   products             Product[]
   rules                Rule[]
   teamMembers          TeamMember[]
+  invites              OrganizationInvite[]
 
   @@map("organizations")
 }
 
 model User {
-  id              String       @id @default(cuid())
-  firebaseUid     String       @unique
-  email           String       @unique
+  id              String          @id @default(cuid())
+  firebaseUid     String          @unique
+  email           String          @unique
   name            String?
   avatar          String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   teamMemberships TeamMember[]
+  sessions        UserSession[]
 
   @@map("users")
 }
 
+enum TeamMemberRole {
+  owner
+  admin
+  member
+  viewer
+}
+
 model TeamMember {
-  id             String       @id @default(cuid())
-  role           String       @default("admin")
+  id             String          @id @default(cuid())
+  role           TeamMemberRole @default(member)
   permissions    Json?
   userId         String
   organizationId String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy      String?
+  joinedAt       DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId])
   @@map("team_members")
@@ -369,4 +381,31 @@ model OrderStatusUpdate {
   order          Order       @relation(fields: [orderId], references: [id])
 
   @@map("order_status_updates")
+}
+
+model OrganizationInvite {
+  id             String       @id @default(cuid())
+  organizationId String
+  inviteCode     String       @unique
+  email          String?
+  role           TeamMemberRole @default(member)
+  expiresAt      DateTime
+  usedAt         DateTime?
+  usedBy         String?
+  createdBy      String
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@map("organization_invites")
+}
+
+model UserSession {
+  id                 String   @id @default(cuid())
+  userId             String
+  activeOrganizationId String?
+  lastActiveAt       DateTime @default(now())
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId])
+  @@map("user_sessions")
 }

@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 // Define public routes that don't require authentication
-const publicRoutes = ["/customer-portal"];
+const publicRoutes = ["/customer-portal", "/api"];
 
-// Define auth routes
-const authRoutes = ["/login", "/signup"];
+// Define auth routes (login, onboarding, etc.)
+const authRoutes = ["/login", "/onboarding", "/select-organization"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -18,21 +18,15 @@ export function middleware(request: NextRequest) {
   // Check if it's an auth route
   const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
 
-  // For now, allow all requests (auth will be implemented next)
-  // TODO: Implement Firebase auth token verification
-  
-  // if (!isPublicRoute && !isAuthRoute) {
-  //   // Check for auth token in cookies or headers
-  //   const token = request.cookies.get("auth-token");
-  //   
-  //   if (!token) {
-  //     // Redirect to login if not authenticated
-  //     const loginUrl = new URL("/login", request.url);
-  //     loginUrl.searchParams.set("from", pathname);
-  //     return NextResponse.redirect(loginUrl);
-  //   }
-  // }
+  // Allow public routes and auth routes
+  if (isPublicRoute || isAuthRoute) {
+    return NextResponse.next();
+  }
 
+  // For dashboard routes, client-side auth will handle protection
+  // via useRequireAuth hook in the dashboard layout
+  // This middleware just ensures proper routing structure
+  
   return NextResponse.next();
 }
 

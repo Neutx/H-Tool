@@ -12,10 +12,9 @@ import {
   getRefundDetails,
   syncRefundsFromShopify,
 } from "@/app/actions/refunds";
+import { useOrganization } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import type { RefundTransaction } from "@/lib/types";
-
-const DEMO_ORG_ID = "cmkirf3lj0000jhhexsx6p1e3";
 
 type RefundMetrics = {
   totalRefunds: number;
@@ -27,6 +26,8 @@ type RefundMetrics = {
 };
 
 export default function RefundsPage() {
+  const { organization } = useOrganization();
+  const organizationId = organization?.id;
   const [refunds, setRefunds] = useState<RefundTransaction[]>([]);
   const [metrics, setMetrics] = useState<RefundMetrics>({
     totalRefunds: 0,
@@ -47,14 +48,16 @@ export default function RefundsPage() {
     useState<string>("");
 
   const loadRefunds = async () => {
-    const result = await getRefunds(DEMO_ORG_ID);
+    if (!organizationId) return;
+    const result = await getRefunds(organizationId);
     if (result.success && result.data) {
       setRefunds(result.data as RefundTransaction[]);
     }
   };
 
   const loadMetrics = async () => {
-    const result = await getRefundMetrics(DEMO_ORG_ID);
+    if (!organizationId) return;
+    const result = await getRefundMetrics(organizationId);
     if (result.success && result.data) {
       setMetrics(result.data as RefundMetrics);
     }
@@ -69,7 +72,7 @@ export default function RefundsPage() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [organizationId]);
 
 
   const handleProcessRefund = (orderId: string) => {
@@ -94,8 +97,9 @@ export default function RefundsPage() {
   };
 
   const handleSyncRefunds = async () => {
+    if (!organizationId) return;
     setIsSyncing(true);
-    const result = await syncRefundsFromShopify(DEMO_ORG_ID);
+    const result = await syncRefundsFromShopify(organizationId);
 
     if (result.success) {
       toast.success(

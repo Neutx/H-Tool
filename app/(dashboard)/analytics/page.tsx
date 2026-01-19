@@ -9,6 +9,7 @@ import {
   getFraudAlerts,
   exportAnalyticsReport,
 } from "@/app/actions/analytics";
+import { useOrganization } from "@/hooks/use-auth";
 import type {
   Metrics,
   CancellationRecord,
@@ -17,10 +18,9 @@ import type {
   TimeRange,
 } from "@/lib/analytics-types";
 
-// Demo organization ID
-const DEMO_ORG_ID = "cmkirf3lj0000jhhexsx6p1e3";
-
 export default function AnalyticsPage() {
+  const { organization } = useOrganization();
+  const organizationId = organization?.id;
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [records, setRecords] = useState<CancellationRecord[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -31,13 +31,14 @@ export default function AnalyticsPage() {
 
   // Fetch all data
   const fetchData = useCallback(async () => {
+    if (!organizationId) return;
     setLoading(true);
     try {
       const [metricsResult, recordsResult, logsResult, alertsResult] = await Promise.all([
-        getAnalyticsMetrics(DEMO_ORG_ID, timeRange, compareEnabled),
-        getCancellationRecords(DEMO_ORG_ID),
-        getActivityLogs(DEMO_ORG_ID),
-        getFraudAlerts(DEMO_ORG_ID),
+        getAnalyticsMetrics(organizationId, timeRange, compareEnabled),
+        getCancellationRecords(organizationId),
+        getActivityLogs(organizationId),
+        getFraudAlerts(organizationId),
       ]);
 
       if (metricsResult.success && metricsResult.data) {
@@ -57,7 +58,7 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [timeRange, compareEnabled]);
+  }, [organizationId, timeRange, compareEnabled]);
 
   useEffect(() => {
     fetchData();
@@ -72,7 +73,8 @@ export default function AnalyticsPage() {
   };
 
   const handleExportReport = async (format: "csv" | "pdf") => {
-    await exportAnalyticsReport(DEMO_ORG_ID, format);
+    if (!organizationId) return;
+    await exportAnalyticsReport(organizationId, format);
   };
 
   if (loading) {

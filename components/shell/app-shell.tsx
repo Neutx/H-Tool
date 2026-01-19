@@ -18,6 +18,8 @@ import {
   UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+import { OrganizationSwitcher } from "./organization-switcher";
 
 const navigation = [
   {
@@ -49,6 +51,7 @@ const navigation = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user, activeOrganization, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -147,6 +150,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="flex-1 lg:ml-0" />
 
+          {/* Organization Switcher */}
+          {activeOrganization && <OrganizationSwitcher />}
+
           {/* Header actions */}
           <div className="flex items-center space-x-4">
             {/* Dark mode toggle */}
@@ -168,10 +174,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="flex items-center space-x-3 rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-700"
               >
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-sm font-medium text-white">
-                  A
+                  {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
                 </div>
                 <span className="hidden text-sm font-medium md:block">
-                  Admin User
+                  {user?.name || user?.email || "User"}
                 </span>
               </button>
 
@@ -188,9 +194,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </Link>
                   <button
                     className="flex w-full items-center space-x-2 px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
-                    onClick={() => {
+                    onClick={async () => {
                       setUserMenuOpen(false);
-                      // TODO: Implement sign out
+                      await signOut();
                     }}
                   >
                     <LogOut className="h-4 w-4" />

@@ -9,13 +9,13 @@ import { OrderReviewPanel } from "@/components/cancellation-rules/order-review-p
 import { getRules, deleteRule, toggleRuleStatus, createRule, updateRule } from "@/app/actions/rules";
 import { getReviewQueueItems } from "@/app/actions/review-queue";
 import { showUndoDeleteToast } from "@/lib/undo-delete";
+import { useOrganization, useAuth } from "@/hooks/use-auth";
 import type { Rule, ReviewQueueItem, CreateRuleFormData } from "@/lib/types";
 
-// TODO: Get organization ID from auth context/session
-const DEMO_ORG_ID = "cmkirf3lj0000jhhexsx6p1e3"; // Demo Store organization
-const DEMO_USER = "Admin User"; // TODO: Get from auth context
-
 export default function CancellationRulesPage() {
+  const { organization } = useOrganization();
+  const { user } = useAuth();
+  const organizationId = organization?.id;
   const [rules, setRules] = useState<Rule[]>([]);
   const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,20 +31,23 @@ export default function CancellationRulesPage() {
   const [deletedRules, setDeletedRules] = useState<Map<string, Rule>>(new Map());
 
   const loadRules = async () => {
-    const result = await getRules(DEMO_ORG_ID);
+    if (!organizationId) return;
+    const result = await getRules(organizationId);
     if (result.success && result.data) {
       setRules(result.data as Rule[]);
     }
   };
 
   const loadReviewQueue = async () => {
-    const result = await getReviewQueueItems(DEMO_ORG_ID);
+    if (!organizationId) return;
+    const result = await getReviewQueueItems(organizationId);
     if (result.success && result.data) {
       setReviewQueue(result.data as ReviewQueueItem[]);
     }
   };
 
   const loadData = async () => {
+    if (!organizationId) return;
     setLoading(true);
     await Promise.all([loadRules(), loadReviewQueue()]);
     setLoading(false);
@@ -54,7 +57,7 @@ export default function CancellationRulesPage() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [organizationId]);
 
 
   const handleCreateRule = () => {
@@ -71,7 +74,8 @@ export default function CancellationRulesPage() {
     if (selectedRule) {
       await updateRule(selectedRule.id, data);
     } else {
-      await createRule({ ...data, organizationId: DEMO_ORG_ID });
+      if (!organizationId) return;
+      await createRule({ ...data, organizationId });
     }
     await loadRules();
     setRuleFormOpen(false);
@@ -188,18 +192,20 @@ export default function CancellationRulesPage() {
         onSave={handleSaveRule}
       />
 
-      <TemplateLibrary
-        open={templateLibraryOpen}
-        onOpenChange={setTemplateLibraryOpen}
-        organizationId={DEMO_ORG_ID}
-        onSuccess={loadRules}
-      />
+      {organizationId && (
+        <TemplateLibrary
+          open={templateLibraryOpen}
+          onOpenChange={setTemplateLibraryOpen}
+          organizationId={organizationId}
+          onSuccess={loadRules}
+        />
+      )}
 
       <OrderReviewPanel
         open={reviewPanelOpen}
         onOpenChange={setReviewPanelOpen}
         item={selectedReviewItem}
-        currentUser={DEMO_USER}
+        currentUser={user?.name || user?.email || "User"}
         onSuccess={loadReviewQueue}
       />
     </div>

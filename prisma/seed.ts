@@ -1,66 +1,18 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, TeamMemberRole } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log("🌱 Starting database seeding...");
 
-  // Clean existing data in development
-  if (process.env.NODE_ENV !== "production") {
-    console.log("🧹 Cleaning existing data...");
-    await prisma.orderStatusUpdate.deleteMany();
-    await prisma.integrationSync.deleteMany();
-    await prisma.failedSync.deleteMany();
-    await prisma.integration.deleteMany();
-    await prisma.reviewQueueItem.deleteMany();
-    await prisma.refundTransaction.deleteMany();
-    await prisma.cancellationRecord.deleteMany();
-    await prisma.cancellationRequest.deleteMany();
-    await prisma.productRestockRule.deleteMany();
-    await prisma.inventoryAdjustment.deleteMany();
-    await prisma.lineItem.deleteMany();
-    await prisma.order.deleteMany();
-    await prisma.product.deleteMany();
-    await prisma.customer.deleteMany();
-    await prisma.rule.deleteMany();
-    await prisma.ruleTemplate.deleteMany();
-    await prisma.teamMember.deleteMany();
-    await prisma.user.deleteMany();
-    await prisma.organization.deleteMany();
-  }
-
-  // 1. Create Organization
-  console.log("📦 Creating organization...");
-  const organization = await prisma.organization.create({
-    data: {
-      name: "Demo Store",
-      shopifyStoreUrl: "demo-store.myshopify.com",
-      hasShopifyDomain: true,
-    },
-  });
-
-  // 2. Create Admin User
-  console.log("👤 Creating admin user...");
-  const adminUser = await prisma.user.create({
-    data: {
-      firebaseUid: "demo-admin-uid",
-      email: "admin@htool.com",
-      name: "Admin User",
-    },
-  });
-
-  // 3. Create Team Member
-  await prisma.teamMember.create({
-    data: {
-      role: "admin",
-      userId: adminUser.id,
-      organizationId: organization.id,
-    },
-  });
-
-  // 4. Create Rule Templates
-  console.log("📋 Creating rule templates...");
-  const templates = await Promise.all([
+  // ALWAYS seed rule templates first (they're global, not org-specific)
+  console.log("📋 Seeding rule templates...");
+  const existingTemplates = await prisma.ruleTemplate.findMany();
+  
+  let templates;
+  if (existingTemplates.length === 0) {
+    console.log("Creating rule templates...");
+    templates = await Promise.all([
     prisma.ruleTemplate.create({
       data: {
         name: "Auto-approve within 15 min",
@@ -108,9 +60,106 @@ async function main() {
         recommended: true,
       },
     }),
-  ]);
+      prisma.ruleTemplate.create({
+        data: {
+          name: "Auto-approve low-value orders",
+          description: "Automatically approve cancellations for orders under ₹500",
+          category: "value_based",
+          conditions: {
+            orderValue: { max: 500 },
+            orderStatus: ["open", "pending"],
+          },
+          actions: {
+            type: "auto_approve",
+            notifyCustomer: true,
+          },
+          recommended: false,
+        },
+      }),
+      prisma.ruleTemplate.create({
+        data: {
+          name: "Escalate VIP customers",
+          description: "Send cancellation requests from VIP customers to manual review",
+          category: "customer_based",
+          conditions: {
+            customerTier: ["vip", "premium"],
+          },
+          actions: {
+            type: "escalate",
+            notifyMerchant: true,
+          },
+          recommended: false,
+        },
+      }),
+    ]);
+    console.log(`✅ Created ${templates.length} rule templates`);
+  } else {
+    console.log(`✅ Rule templates already exist (${existingTemplates.length} templates)`);
+    templates = existingTemplates;
+  }
 
-  // 5. Create Active Rules
+  // Clean existing demo data in development only
+  if (process.env.NODE_ENV !== "production") {
+    console.log("🧹 Cleaning existing demo data...");
+    await prisma.orderStatusUpdate.deleteMany();
+    await prisma.integrationSync.deleteMany();
+    await prisma.failedSync.deleteMany();
+    await prisma.integration.deleteMany();
+    await prisma.reviewQueueItem.deleteMany();
+    await prisma.refundTransaction.deleteMany();
+    await prisma.cancellationRecord.deleteMany();
+    await prisma.cancellationRequest.deleteMany();
+    await prisma.productRestockRule.deleteMany();
+    await prisma.inventoryAdjustment.deleteMany();
+    await prisma.lineItem.deleteMany();
+    await prisma.order.deleteMany();
+    await prisma.product.deleteMany();
+    await prisma.customer.deleteMany();
+    await prisma.rule.deleteMany();
+    // Don't delete templates - they're global and should persist
+    await prisma.teamMember.deleteMany();
+    await prisma.user.deleteMany();
+    await prisma.organization.deleteMany();
+  } else {
+    // In production, only seed demo data if it doesn't exist
+    const existingOrg = await prisma.organization.findFirst();
+    if (existingOrg) {
+      console.log("✅ Demo organization already exists, skipping demo data seeding");
+      return;
+    }
+  }
+
+  // 1. Create Organization
+  console.log("📦 Creating demo organization...");
+  const organization = await prisma.organization.create({
+    data: {
+      name: "Demo Store",
+      shopifyStoreUrl: "demo-store.myshopify.com",
+      hasShopifyDomain: true,
+    },
+  });
+
+  // 2. Create Admin User
+  console.log("👤 Creating admin user...");
+  const adminUser = await prisma.user.create({
+    data: {
+      firebaseUid: "demo-admin-uid",
+      email: "admin@htool.com",
+      name: "Admin User",
+    },
+  });
+
+  // 3. Create Team Member
+  await prisma.teamMember.create({
+    data: {
+      role: TeamMemberRole.owner,
+      userId: adminUser.id,
+      organizationId: organization.id,
+      joinedAt: new Date(),
+    },
+  });
+
+  // 4. Create Active Rules
   console.log("⚙️ Creating active rules...");
   await prisma.rule.create({
     data: {
@@ -129,7 +178,7 @@ async function main() {
       priority: 1,
       active: true,
       usageCount: 42,
-      createdFromTemplateId: templates[0].id,
+      createdFromTemplateId: templates.length > 0 ? templates[0].id : null,
     },
   });
 
