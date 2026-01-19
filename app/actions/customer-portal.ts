@@ -120,11 +120,11 @@ export async function getCancellationStatus(cancellationRequestId: string) {
     if (request.cancellationRecord) {
       timeline.processing = request.cancellationRecord.createdAt;
 
-      if (request.cancellationRecord.refundStatus === "completed") {
+      if (request.cancellationRecord.refundStatus === "completed" && request.cancellationRecord.completedAt) {
         timeline.refunded = request.cancellationRecord.completedAt;
       }
 
-      if (request.status === "completed") {
+      if (request.status === "completed" && request.cancellationRecord.completedAt) {
         timeline.completed = request.cancellationRecord.completedAt;
       }
     }

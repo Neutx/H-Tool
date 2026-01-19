@@ -30,7 +30,7 @@ type InventoryMetrics = {
   restocksToday: number;
   adjustmentsToday: number;
   syncStatus: "synced" | "syncing" | "error";
-  lastSyncAt: Date | null;
+  lastSyncAt?: Date;
 };
 
 export default function InventoryPage() {
@@ -43,7 +43,6 @@ export default function InventoryPage() {
     restocksToday: 0,
     adjustmentsToday: 0,
     syncStatus: "synced",
-    lastSyncAt: null,
   });
   const [loading, setLoading] = useState(true);
 
