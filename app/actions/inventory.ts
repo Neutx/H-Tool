@@ -85,7 +85,7 @@ export async function getInventoryMetrics(organizationId: string) {
         totalValue,
         restocksToday,
         adjustmentsToday,
-        syncStatus: lastSync ? "synced" : "error",
+        syncStatus: (lastSync ? "synced" : "error") as "synced" | "syncing" | "error",
         lastSyncAt: lastSync?.completedAt || null,
       },
     };

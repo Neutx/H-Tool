@@ -29,7 +29,7 @@ type InventoryMetrics = {
   totalValue: number;
   restocksToday: number;
   adjustmentsToday: number;
-  syncStatus: string;
+  syncStatus: "synced" | "syncing" | "error";
   lastSyncAt: Date | null;
 };
 
