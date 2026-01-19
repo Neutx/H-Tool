@@ -147,7 +147,7 @@ export async function getCancellationStatus(cancellationRequestId: string) {
         updatedAt: request.updatedAt,
         timeline,
         refundAmount: request.cancellationRecord?.refundAmount || 0,
-        refundStatus: request.cancellationRecord?.refundStatus,
+        refundStatus: request.cancellationRecord?.refundStatus || null,
       },
     };
   } catch (error) {

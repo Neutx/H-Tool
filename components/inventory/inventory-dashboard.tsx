@@ -5,10 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
-import type { Product } from "@/lib/types";
+import type { Product, ProductRestockRule } from "@/lib/types";
 
 interface InventoryDashboardProps {
-  products: Product[];
+  products: (Product & { restockRule?: ProductRestockRule | null })[];
   metrics: {
     totalProducts: number;
     lowStockProducts: number;
@@ -33,18 +33,19 @@ export function InventoryDashboard({
   onManageRules,
   onSync,
 }: InventoryDashboardProps) {
-  const getStockStatus = (stockLevel: number, restockRule?: { minThreshold: number }) => {
+  const getStockStatus = (stockLevel: number, restockRule?: ProductRestockRule | null) => {
     if (stockLevel <= 0) {
       return { variant: "error" as const, label: "Out of Stock", color: "text-red-600" };
     }
-    if (restockRule && stockLevel <= restockRule.minThreshold) {
+    // Note: ProductRestockRule doesn't have minThreshold in schema, using default threshold
+    if (restockRule && stockLevel <= 10) {
       return { variant: "warning" as const, label: "Low Stock", color: "text-amber-600" };
     }
     return { variant: "success" as const, label: "In Stock", color: "text-emerald-600" };
   };
 
   const getSyncStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: string; label: string; icon: React.ComponentType<{ className?: string }> }> = {
+    const variants: Record<string, { variant: "default" | "warning" | "error" | "secondary" | "success" | "destructive" | "outline"; label: string; icon: React.ComponentType<{ className?: string }> }> = {
       synced: { variant: "success", label: "Synced", icon: CheckCircle },
       syncing: { variant: "warning", label: "Syncing", icon: RefreshCw },
       error: { variant: "error", label: "Error", icon: AlertTriangle },
@@ -121,7 +122,7 @@ export function InventoryDashboard({
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-3">
-            <Badge {...syncStatus}>
+            <Badge variant={syncStatus.variant}>
               <SyncIcon className="mr-1 h-3 w-3" />
               {syncStatus.label}
             </Badge>
@@ -153,7 +154,7 @@ export function InventoryDashboard({
           ) : (
             <div className="space-y-3">
               {products.map((product) => {
-                const status = getStockStatus(product.stockLevel, product.restockRule);
+                const status = getStockStatus(product.currentStock, product.restockRule || undefined);
                 return (
                   <div
                     key={product.id}
@@ -161,11 +162,11 @@ export function InventoryDashboard({
                   >
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-3">
-                        <span className="font-semibold">{product.title}</span>
+                        <span className="font-semibold">{product.name}</span>
                         <Badge {...status}>{status.label}</Badge>
                         {product.restockRule && (
                           <Badge variant="secondary">
-                            Auto-restock: {product.restockRule.strategy}
+                            Auto-restock: {product.restockRule.reason || "Enabled"}
                           </Badge>
                         )}
                       </div>
@@ -173,15 +174,15 @@ export function InventoryDashboard({
                         <span>SKU: {product.sku}</span>
                         <span>•</span>
                         <span className={`font-medium ${status.color}`}>
-                          Stock: {product.stockLevel}
+                          Stock: {product.currentStock}
                         </span>
                         <span>•</span>
-                        <span>{formatCurrency(product.price)}</span>
-                        {product.restockRule && (
+                        <span>SKU: {product.sku}</span>
+                        {product.restockRule && !product.restockRule.neverAutoRestock && (
                           <>
                             <span>•</span>
                             <span>
-                              Min: {product.restockRule.minThreshold}
+                              Auto-restock enabled
                             </span>
                           </>
                         )}

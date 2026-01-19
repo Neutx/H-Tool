@@ -5,6 +5,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { CreateRuleFormData } from "@/lib/types";
 
+// Helper to convert to Prisma InputJsonValue
+function toInputJsonValue(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
+}
+
 /**
  * Get all rules for an organization
  */
@@ -56,8 +61,8 @@ export async function createRule(data: CreateRuleFormData & { organizationId: st
         name: data.name,
         description: data.description,
         organizationId: data.organizationId,
-        conditions: data.conditions as Prisma.JsonValue,
-        actions: data.actions as Prisma.JsonValue,
+        conditions: toInputJsonValue(data.conditions),
+        actions: toInputJsonValue(data.actions),
         priority: data.priority ?? 0,
         active: data.active ?? true,
       },
@@ -84,8 +89,8 @@ export async function updateRule(
       data: {
         ...(data.name && { name: data.name }),
         ...(data.description !== undefined && { description: data.description }),
-        ...(data.conditions && { conditions: data.conditions as Prisma.JsonValue }),
-        ...(data.actions && { actions: data.actions as Prisma.JsonValue }),
+        ...(data.conditions && { conditions: toInputJsonValue(data.conditions) }),
+        ...(data.actions && { actions: toInputJsonValue(data.actions) }),
         ...(data.priority !== undefined && { priority: data.priority }),
         ...(data.active !== undefined && { active: data.active }),
       },
@@ -210,8 +215,8 @@ export async function activateTemplate(
         name: customizations?.name ?? template.name,
         description: customizations?.description ?? template.description,
         organizationId,
-        conditions: (customizations?.conditions ?? template.conditions) as Prisma.JsonValue,
-        actions: (customizations?.actions ?? template.actions) as Prisma.JsonValue,
+        conditions: toInputJsonValue(customizations?.conditions ?? template.conditions),
+        actions: toInputJsonValue(customizations?.actions ?? template.actions),
         priority: customizations?.priority ?? nextPriority,
         active: customizations?.active ?? true,
         createdFromTemplateId: templateId,

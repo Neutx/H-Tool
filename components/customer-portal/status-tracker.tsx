@@ -43,7 +43,7 @@ export function StatusTracker({ status, order, onBack }: StatusTrackerProps) {
   };
 
   const getStatusBadge = (statusValue: string) => {
-    const statusMap: Record<string, { variant: string; label: string }> = {
+    const statusMap: Record<string, { variant: "default" | "warning" | "error" | "secondary" | "success" | "destructive" | "outline"; label: string }> = {
       pending: { variant: "warning", label: "Pending Review" },
       approved: { variant: "success", label: "Approved" },
       processing: { variant: "default", label: "Processing" },
@@ -51,7 +51,7 @@ export function StatusTracker({ status, order, onBack }: StatusTrackerProps) {
       denied: { variant: "error", label: "Denied" },
       info_requested: { variant: "warning", label: "Information Requested" },
     };
-    return statusMap[statusValue] || { variant: "secondary", label: statusValue };
+    return statusMap[statusValue] || { variant: "secondary" as const, label: statusValue };
   };
 
   const statusBadge = getStatusBadge(status.status);

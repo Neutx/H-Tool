@@ -65,7 +65,7 @@ export default function CustomerPortalPage() {
 
   const handleCancellationSubmitted = async () => {
     // Refresh order data
-    if (order) {
+    if (order && order.customer.email) {
       const result = await lookupOrder(order.orderNumber, order.customer.email);
       if (result.success && "data" in result && result.data) {
         setOrder(result.data);

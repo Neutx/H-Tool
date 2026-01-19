@@ -32,7 +32,7 @@ export interface CustomerOrder {
   status: string;
   customer: {
     name?: string;
-    email: string;
+    email: string | null;
   };
   lineItems: Array<{
     id: string;

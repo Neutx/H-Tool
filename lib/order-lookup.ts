@@ -115,7 +115,7 @@ export async function getOrderForPortal(orderId: string) {
       status: order.status,
       customer: {
         name: order.customer.name || undefined,
-        email: order.customer.email,
+        email: order.customer.email || null,
       },
       lineItems: order.lineItems.map((item) => ({
         id: item.id,
@@ -128,9 +128,9 @@ export async function getOrderForPortal(orderId: string) {
       cancellationRequest: order.cancellationRequests?.[0]
         ? {
             id: order.cancellationRequests[0].id,
-            status: order.cancellationRequests[0].status,
+            status: order.cancellationRequests[0].status as import("@/lib/customer-portal-types").CancellationStatus,
             reason: order.cancellationRequests[0].reason,
-            reasonCategory: order.cancellationRequests[0].reasonCategory,
+            reasonCategory: order.cancellationRequests[0].reasonCategory as import("@/lib/customer-portal-types").ReasonCategory,
             createdAt: order.cancellationRequests[0].createdAt,
             updatedAt: order.cancellationRequests[0].updatedAt,
             customerNotes: order.cancellationRequests[0].notes || undefined,

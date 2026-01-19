@@ -22,23 +22,23 @@ export function CancellationRecordsTable({
   const [filterStatus, setFilterStatus] = useState<string>("all");
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: string; label: string }> = {
+    const variants: Record<string, { variant: "default" | "warning" | "error" | "secondary" | "success" | "destructive" | "outline"; label: string }> = {
       completed: { variant: "success", label: "Completed" },
       pending: { variant: "warning", label: "Pending" },
       failed: { variant: "error", label: "Failed" },
       rejected: { variant: "secondary", label: "Rejected" },
     };
-    const config = variants[status] || { variant: "default", label: status };
-    return <Badge variant={config.variant as "default" | "secondary" | "success" | "warning" | "error"}>{config.label}</Badge>;
+    const config = variants[status] || { variant: "default" as const, label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   const getRiskBadge = (level: string) => {
-    const variants: Record<string, { variant: string; label: string }> = {
+    const variants: Record<string, { variant: "default" | "warning" | "error" | "secondary" | "success" | "destructive" | "outline"; label: string }> = {
       low: { variant: "default", label: "Low" },
       medium: { variant: "warning", label: "Medium" },
       high: { variant: "error", label: "High" },
     };
-    const config = variants[level] || { variant: "default", label: level };
+    const config = variants[level] || { variant: "default" as const, label: level };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 

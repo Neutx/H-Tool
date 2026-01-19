@@ -74,7 +74,8 @@ export function TemplateLibrary({
       deny: "Deny",
       escalate: "Escalate",
     };
-    return actionMap[actions?.type] || "Unknown";
+    const actionsObj = actions as { type?: string } | null;
+    return actionMap[actionsObj?.type || ""] || "Unknown";
   };
 
   return (

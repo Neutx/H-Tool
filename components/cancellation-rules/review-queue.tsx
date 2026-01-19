@@ -57,7 +57,7 @@ export function ReviewQueue({ items, onReviewItem }: ReviewQueueProps) {
                   <DollarSign className="h-4 w-4" />
                   {formatCurrency(item.order.totalAmount)}
                 </div>
-                <div>{item.order.customer.name || item.order.customer.email}</div>
+                <div>{item.order.customerId || "Unknown Customer"}</div>
               </div>
 
               <p className="text-sm">

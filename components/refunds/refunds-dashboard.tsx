@@ -33,13 +33,13 @@ export function RefundsDashboard({
   isSyncing = false,
 }: RefundsDashboardProps) {
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: string; label: string }> = {
+    const variants: Record<string, { variant: "default" | "warning" | "error" | "secondary" | "success" | "destructive" | "outline"; label: string }> = {
       pending: { variant: "warning", label: "Pending" },
       processing: { variant: "warning", label: "Processing" },
       completed: { variant: "success", label: "Completed" },
       failed: { variant: "error", label: "Failed" },
     };
-    return variants[status] || { variant: "secondary", label: status };
+    return variants[status] || { variant: "secondary" as const, label: status };
   };
 
   return (
@@ -163,7 +163,7 @@ export function RefundsDashboard({
                       })()}
                     </div>
                     <div className="flex gap-4 text-sm text-muted-foreground flex-wrap items-center">
-                      <span>{refund.order.customer.name || refund.order.customer.email}</span>
+                      <span>{refund.order.customerId || "Unknown Customer"}</span>
                       <span>•</span>
                       {refund.productNames && (
                         <>

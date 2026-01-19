@@ -20,7 +20,7 @@ export function OrderDetailsView({
   onViewStatus,
 }: OrderDetailsViewProps) {
   const getOrderStatusBadge = (status: string) => {
-    const statusMap: Record<string, { variant: string; label: string }> = {
+    const statusMap: Record<string, { variant: "default" | "warning" | "error" | "secondary" | "success" | "destructive" | "outline"; label: string }> = {
       pending: { variant: "warning", label: "Pending" },
       confirmed: { variant: "default", label: "Confirmed" },
       processing: { variant: "default", label: "Processing" },
@@ -28,11 +28,11 @@ export function OrderDetailsView({
       delivered: { variant: "success", label: "Delivered" },
       cancelled: { variant: "error", label: "Cancelled" },
     };
-    return statusMap[status.toLowerCase()] || { variant: "secondary", label: status };
+    return statusMap[status.toLowerCase()] || { variant: "secondary" as const, label: status };
   };
 
   const getCancellationStatusBadge = (status: string) => {
-    const statusMap: Record<string, { variant: string; label: string }> = {
+    const statusMap: Record<string, { variant: "default" | "warning" | "error" | "secondary" | "success" | "destructive" | "outline"; label: string }> = {
       pending: { variant: "warning", label: "Pending Review" },
       approved: { variant: "success", label: "Approved" },
       processing: { variant: "default", label: "Processing" },
@@ -40,12 +40,12 @@ export function OrderDetailsView({
       denied: { variant: "error", label: "Denied" },
       info_requested: { variant: "warning", label: "Info Requested" },
     };
-    return statusMap[status] || { variant: "secondary", label: status };
+    return statusMap[status] || { variant: "secondary" as const, label: status };
   };
 
   const orderStatus = getOrderStatusBadge(order.status);
   const hasCancellationRequest = !!order.cancellationRequest;
-  const cancellationStatus = hasCancellationRequest
+  const cancellationStatus = order.cancellationRequest
     ? getCancellationStatusBadge(order.cancellationRequest.status)
     : null;
 
@@ -63,12 +63,12 @@ export function OrderDetailsView({
       </div>
 
       {/* Cancellation Request Status */}
-      {hasCancellationRequest && (
+      {order.cancellationRequest && cancellationStatus && (
         <Card className="border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-900/20">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Cancellation Request</CardTitle>
-              <Badge {...cancellationStatus}>{cancellationStatus!.label}</Badge>
+              <Badge {...cancellationStatus}>{cancellationStatus.label}</Badge>
             </div>
           </CardHeader>
           <CardContent>
