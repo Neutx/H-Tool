@@ -1,20 +1,80 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/use-auth";
+import { acceptInvite } from "@/app/actions/organization";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, loading, firebaseUser } = useAuth();
+  const searchParams = useSearchParams();
+  const { user, loading, firebaseUser, refetch } = useAuth();
+  const inviteCode = searchParams?.get("invite");
+  const prefillEmail = searchParams?.get("email");
+  const processingInviteRef = useRef(false);
+  const inviteProcessedRef = useRef(false);
 
   useEffect(() => {
-    if (!loading && user) {
-      // User is logged in, check if they have organizations
+    // Don't process if already processing or already processed
+    if (processingInviteRef.current || inviteProcessedRef.current) {
+      return;
+    }
+
+    if (!loading && user && inviteCode) {
+      // User just logged in with a pending invite, accept it
+      processingInviteRef.current = true;
+      
+      const handleInviteAcceptance = async () => {
+        try {
+          const result = await acceptInvite(inviteCode, user.id);
+          if (result.success) {
+            toast.success("Successfully joined organization!");
+            // Wait for refetch to complete before redirecting
+            await refetch();
+            inviteProcessedRef.current = true;
+            processingInviteRef.current = false;
+            // Remove invite code from URL to prevent re-processing
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete("invite");
+            newUrl.searchParams.delete("email");
+            window.history.replaceState({}, "", newUrl.toString());
+            // Small delay to ensure state is updated
+            setTimeout(() => {
+              router.push("/dashboard");
+            }, 200);
+          } else {
+            inviteProcessedRef.current = true;
+            processingInviteRef.current = false;
+            toast.error(result.error || "Failed to accept invite");
+            // Redirect based on error
+            if (result.error?.includes("expired")) {
+              router.push("/dashboard");
+            } else if (result.error?.includes("already a member")) {
+              router.push("/dashboard");
+            } else {
+              router.push("/dashboard");
+            }
+          }
+        } catch (error) {
+          inviteProcessedRef.current = true;
+          processingInviteRef.current = false;
+          console.error("Error accepting invite:", error);
+          router.push("/dashboard");
+        }
+      };
+
+      handleInviteAcceptance();
+      return; // Exit early to prevent other redirects
+    }
+    
+    // Only check for normal redirect if we're not processing an invite
+    if (!loading && user && !inviteCode && !processingInviteRef.current && !inviteProcessedRef.current) {
+      // User is logged in WITHOUT an invite code, check if they have organizations
       if (user.teamMemberships.length === 0) {
         router.push("/onboarding");
       } else if (user.teamMemberships.length === 1) {
@@ -23,7 +83,7 @@ export default function LoginPage() {
         router.push("/select-organization");
       }
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, inviteCode, refetch]);
 
   const handleGoogleSignIn = async () => {
     try {

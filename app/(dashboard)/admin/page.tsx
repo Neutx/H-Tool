@@ -11,6 +11,7 @@ import {
   getOrganizationInvites,
   deleteInvite,
   updateOrganization,
+  resendInviteEmail,
 } from "@/app/actions/organization";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Copy, Trash2, UserPlus, Users, Settings, Link as LinkIcon } from "lucide-react";
+import { Building2, Copy, Trash2, UserPlus, Users, Settings, Link as LinkIcon, Mail, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { TeamMemberRole } from "@prisma/client";
 import type { TeamMember, OrganizationInvite } from "@prisma/client";
@@ -83,17 +84,32 @@ export default function AdminPage() {
     e.preventDefault();
     if (!activeOrganization || !user) return;
 
+    if (!inviteEmail.trim()) {
+      toast.error("Email is required");
+      return;
+    }
+
     try {
       const result = await createInvite(
         activeOrganization.id,
         inviteRole,
         user.id,
-        inviteEmail || undefined,
+        inviteEmail.trim(),
         inviteExpiresIn
       );
 
       if (result.success && result.data) {
-        toast.success("Invite created successfully!");
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+        const inviteLink = `${appUrl}/accept-invite/${result.data.inviteCode}`;
+        
+        // Copy link to clipboard
+        navigator.clipboard.writeText(inviteLink);
+        
+        toast.success("Invite created and email sent successfully!", {
+          description: `Invite link copied to clipboard: ${inviteLink}`,
+          duration: 5000,
+        });
+        
         setInviteEmail("");
         setInviteRole(TeamMemberRole.member);
         await loadTeamData();
@@ -106,9 +122,27 @@ export default function AdminPage() {
     }
   };
 
-  const handleCopyInviteCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    toast.success("Invite code copied to clipboard!");
+  const handleCopyInviteLink = (code: string) => {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+    const inviteLink = `${appUrl}/accept-invite/${code}`;
+    navigator.clipboard.writeText(inviteLink);
+    toast.success("Invite link copied to clipboard!");
+  };
+
+  const handleResendEmail = async (inviteId: string) => {
+    if (!user) return;
+    try {
+      const result = await resendInviteEmail(inviteId, user.id);
+      if (result.success) {
+        toast.success("Invite email resent successfully!");
+        await loadTeamData();
+      } else {
+        toast.error(result.error || "Failed to resend email");
+      }
+    } catch (error) {
+      toast.error("An error occurred");
+      console.error(error);
+    }
   };
 
   const handleDeleteInvite = async (inviteId: string) => {
@@ -243,13 +277,14 @@ export default function AdminPage() {
                 <form onSubmit={handleCreateInvite} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="inviteEmail">Email (Optional)</Label>
+                      <Label htmlFor="inviteEmail">Email <span className="text-red-500">*</span></Label>
                       <Input
                         id="inviteEmail"
                         type="email"
                         placeholder="user@example.com"
                         value={inviteEmail}
                         onChange={(e) => setInviteEmail(e.target.value)}
+                        required
                       />
                     </div>
                     <div className="space-y-2">
@@ -308,35 +343,56 @@ export default function AdminPage() {
                     >
                       <div className="flex-1">
                         <div className="flex items-center space-x-2">
-                          <code className="text-sm font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
-                            {invite.inviteCode}
-                          </code>
                           <Badge variant={getRoleBadge(invite.role).variant}>
                             {getRoleBadge(invite.role).label}
                           </Badge>
                           {invite.email && (
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-sm font-medium">
                               {invite.email}
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Expires: {new Date(invite.expiresAt).toLocaleDateString()}
-                        </p>
+                        <div className="mt-2 space-y-1">
+                          {invite.emailSentAt && (
+                            <div className="flex items-center space-x-1 text-xs text-muted-foreground">
+                              <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                              <span>Email sent {new Date(invite.emailSentAt).toLocaleDateString()}</span>
+                              {invite.emailSentCount > 1 && (
+                                <span>({invite.emailSentCount} times)</span>
+                              )}
+                            </div>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            Expires: {new Date(invite.expiresAt).toLocaleDateString()}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex items-center space-x-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleCopyInviteCode(invite.inviteCode)}
+                          onClick={() => handleCopyInviteLink(invite.inviteCode)}
+                          title="Copy invite link"
                         >
-                          <Copy className="h-4 w-4" />
+                          <LinkIcon className="h-4 w-4" />
                         </Button>
+                        {canManageTeam && invite.email && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleResendEmail(invite.id)}
+                            title="Resend email"
+                            disabled={invite.emailSentCount >= 3}
+                          >
+                            <Mail className="h-4 w-4" />
+                          </Button>
+                        )}
                         {canManageTeam && (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleDeleteInvite(invite.id)}
+                            title="Delete invite"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

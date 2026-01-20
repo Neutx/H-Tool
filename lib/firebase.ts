@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
-import { getAuth, Auth } from "firebase/auth";
+import { getAuth, Auth, isSignInWithEmailLink, signInWithEmailLink } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -23,4 +23,19 @@ if (getApps().length === 0) {
 }
 
 export { app, auth };
+
+/**
+ * Check if current URL is a Firebase email link
+ */
+export function isInviteLink(): boolean {
+  if (typeof window === "undefined") return false;
+  return isSignInWithEmailLink(auth, window.location.href);
+}
+
+/**
+ * Sign in with Firebase email link
+ */
+export async function signInWithInviteLink(email: string) {
+  return await signInWithEmailLink(auth, email, window.location.href);
+}
 

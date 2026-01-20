@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
 const publicRoutes = ["/customer-portal", "/api"];
 
 // Define auth routes (login, onboarding, etc.)
-const authRoutes = ["/login", "/onboarding", "/select-organization"];
+const authRoutes = ["/login", "/onboarding", "/select-organization", "/accept-invite"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

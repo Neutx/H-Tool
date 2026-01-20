@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { nanoid } from "nanoid";
 import type { Organization, TeamMember, OrganizationInvite } from "@prisma/client";
 import { TeamMemberRole } from "@prisma/client";
+import { sendInviteEmail } from "@/lib/email-service";
 
 interface ActionResult<T> {
   success: boolean;
@@ -108,6 +109,24 @@ export async function createInvite(
       };
     }
 
+    // Check for duplicate pending invites
+    if (email) {
+      const existingInvite = await prisma.organizationInvite.findFirst({
+        where: {
+          organizationId,
+          email,
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+      });
+      if (existingInvite) {
+        return {
+          success: false,
+          error: "A pending invite already exists for this email",
+        };
+      }
+    }
+
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
@@ -121,6 +140,32 @@ export async function createInvite(
         createdBy,
       },
     });
+
+    // Send email if email is provided
+    if (email && invite) {
+      const organization = await prisma.organization.findUnique({
+        where: { id: organizationId },
+      });
+
+      if (organization) {
+        const emailResult = await sendInviteEmail(invite, organization);
+        
+        // Update email tracking even if email fails (for logging)
+        await prisma.organizationInvite.update({
+          where: { id: invite.id },
+          data: {
+            emailSentAt: emailResult.success ? new Date() : null,
+            emailSentCount: emailResult.success ? 1 : 0,
+            lastEmailSentAt: emailResult.success ? new Date() : null,
+          },
+        });
+
+        // Don't fail invite creation if email fails, but log it
+        if (!emailResult.success) {
+          console.warn("Failed to send invite email:", emailResult.error);
+        }
+      }
+    }
 
     return { success: true, data: invite };
   } catch (error) {
@@ -164,7 +209,7 @@ export async function acceptInvite(
 
     if (invite.email) {
       const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (user?.email !== invite.email) {
+      if (user?.email.toLowerCase() !== invite.email.toLowerCase()) {
         return {
           success: false,
           error: "This invite is for a different email address",
@@ -479,6 +524,111 @@ export async function deleteInvite(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to delete invite",
+    };
+  }
+}
+
+export async function resendInviteEmail(
+  inviteId: string,
+  resendBy: string
+): Promise<ActionResult<void>> {
+  try {
+    const invite = await prisma.organizationInvite.findUnique({
+      where: { id: inviteId },
+      include: { organization: true },
+    });
+
+    if (!invite) {
+      return {
+        success: false,
+        error: "Invite not found",
+      };
+    }
+
+    // Verify resender has permission
+    const resenderMembership = await prisma.teamMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: resendBy,
+          organizationId: invite.organizationId,
+        },
+      },
+    });
+
+    if (!resenderMembership || (resenderMembership.role !== TeamMemberRole.owner && resenderMembership.role !== TeamMemberRole.admin)) {
+      return {
+        success: false,
+        error: "Only owners and admins can resend invites",
+      };
+    }
+
+    // Check if invite is already used
+    if (invite.usedAt) {
+      return {
+        success: false,
+        error: "This invite has already been used",
+      };
+    }
+
+    // Check if invite is expired
+    if (invite.expiresAt < new Date()) {
+      return {
+        success: false,
+        error: "This invite has expired",
+      };
+    }
+
+    // Rate limiting: max 3 sends per invite
+    if (invite.emailSentCount >= 3) {
+      return {
+        success: false,
+        error: "Maximum resend limit reached (3 emails per invite)",
+      };
+    }
+
+    // Check if last email was sent less than 1 hour ago
+    if (invite.lastEmailSentAt) {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      if (invite.lastEmailSentAt > oneHourAgo) {
+        return {
+          success: false,
+          error: "Please wait at least 1 hour before resending",
+        };
+      }
+    }
+
+    if (!invite.email) {
+      return {
+        success: false,
+        error: "Invite email is required",
+      };
+    }
+
+    // Send email
+    const emailResult = await sendInviteEmail(invite, invite.organization);
+
+    // Update email tracking
+    await prisma.organizationInvite.update({
+      where: { id: inviteId },
+      data: {
+        emailSentAt: invite.emailSentAt || (emailResult.success ? new Date() : null),
+        emailSentCount: invite.emailSentCount + (emailResult.success ? 1 : 0),
+        lastEmailSentAt: emailResult.success ? new Date() : invite.lastEmailSentAt,
+      },
+    });
+
+    if (!emailResult.success) {
+      return {
+        success: false,
+        error: emailResult.error || "Failed to send email",
+      };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to resend invite email",
     };
   }
 }
