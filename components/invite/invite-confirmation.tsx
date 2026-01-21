@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +28,9 @@ export function InviteConfirmation({
   loading,
 }: InviteConfirmationProps) {
 
-  const emailMismatch = inviteData.inviteEmail && inviteData.inviteEmail.toLowerCase() !== userEmail.toLowerCase();
+  const emailMismatch = Boolean(
+    inviteData.inviteEmail && inviteData.inviteEmail.toLowerCase() !== userEmail.toLowerCase()
+  );
   const roleDisplay = inviteData.role.charAt(0).toUpperCase() + inviteData.role.slice(1);
 
   return (
