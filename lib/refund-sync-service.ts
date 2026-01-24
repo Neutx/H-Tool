@@ -72,19 +72,23 @@ export async function syncShopifyRefunds(
     // Handle both direct refunds endpoint and fallback order-scanning format
     let refunds: any[] = [];
     
-    if ("refunds" in shopifyResponse.data && Array.isArray(shopifyResponse.data.refunds)) {
-      // Direct /refunds.json endpoint response
-      refunds = shopifyResponse.data.refunds.map((refund: any) => ({
-        id: refund.id,
-        createdAt: refund.created_at,
-        note: refund.note || null,
-        orderId: refund.order_id,
-        transactions: refund.transactions || [],
-        refund_line_items: refund.refund_line_items || [],
-      }));
-    } else if ("refunds" in shopifyResponse.data && shopifyResponse.data.refunds?.edges) {
-      // Fallback: order-scanning format (from getRecentRefunds)
-      refunds = shopifyResponse.data.refunds.edges.map((edge: any) => edge.node);
+    if ("refunds" in shopifyResponse.data) {
+      const refundsData = shopifyResponse.data.refunds as any;
+      
+      if (Array.isArray(refundsData)) {
+        // Direct /refunds.json endpoint response
+        refunds = refundsData.map((refund: any) => ({
+          id: refund.id,
+          createdAt: refund.created_at,
+          note: refund.note || null,
+          orderId: refund.order_id,
+          transactions: refund.transactions || [],
+          refund_line_items: refund.refund_line_items || [],
+        }));
+      } else if (refundsData?.edges) {
+        // Fallback: order-scanning format (from getRecentRefunds)
+        refunds = refundsData.edges.map((edge: any) => edge.node);
+      }
     }
     
     // If no refunds found, this is still success (just means no refunds exist in Shopify)

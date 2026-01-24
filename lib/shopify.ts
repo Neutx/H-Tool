@@ -176,9 +176,9 @@ class ShopifyClient {
   }
 
   /**
-   * Get all refunds for an order
+   * Get all refunds for a specific order
    */
-  async getRefunds(orderId: string) {
+  async getOrderRefunds(orderId: string) {
     return this.request(`/orders/${orderId}/refunds.json`, {
       method: "GET",
     });
