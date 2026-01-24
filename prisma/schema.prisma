@@ -26,6 +26,8 @@ model Organization {
   rules                Rule[]
   teamMembers          TeamMember[]
   invites              OrganizationInvite[]
+  shopifyWebhooks      ShopifyWebhook[]
+  syncState            SyncState?
 
   @@map("organizations")
 }
@@ -98,6 +100,8 @@ model Order {
   organizationId       String
   orderDate            DateTime              @default(now())
   shippingAddress      Json?
+  cancelledAt          DateTime?
+  cancelReason         String?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   cancellationRecords  CancellationRecord[]
@@ -109,6 +113,8 @@ model Order {
   organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   refundTransactions   RefundTransaction[]
   reviewQueueItems     ReviewQueueItem[]
+  shopifyCancellation  ShopifyCancellation?
+  shopifyReturns       ShopifyReturn[]
 
   @@map("orders")
 }
@@ -411,4 +417,85 @@ model UserSession {
   
   @@unique([userId])
   @@map("user_sessions")
+}
+
+// Shopify-specific models for webhooks and proper data structure
+
+model ShopifyCancellation {
+  id                    String   @id @default(cuid())
+  shopifyCancellationId String   @unique
+  shopifyOrderId        String   @unique
+  cancelledAt           DateTime
+  cancelReason          String?
+  staffNote             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  order                 Order    @relation(fields: [shopifyOrderId], references: [shopifyOrderId], onDelete: Cascade)
+
+  @@index([shopifyOrderId])
+  @@index([cancelledAt])
+  @@map("shopify_cancellations")
+}
+
+model ShopifyReturn {
+  id               String              @id @default(cuid())
+  shopifyReturnId  String              @unique
+  shopifyOrderId   String
+  status           String              // REQUESTED | APPROVED | RECEIVED | DECLINED
+  requestedAt      DateTime
+  receivedAt       DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  order            Order               @relation(fields: [shopifyOrderId], references: [shopifyOrderId], onDelete: Cascade)
+  lineItems        ShopifyReturnLineItem[]
+
+  @@index([shopifyReturnId])
+  @@index([shopifyOrderId])
+  @@index([requestedAt])
+  @@map("shopify_returns")
+}
+
+model ShopifyReturnLineItem {
+  id                 String         @id @default(cuid())
+  shopifyLineItemId  String
+  quantity           Int
+  reason             String?
+  returnId           String
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  return             ShopifyReturn  @relation(fields: [returnId], references: [id], onDelete: Cascade)
+
+  @@index([returnId])
+  @@map("shopify_return_line_items")
+}
+
+model ShopifyWebhook {
+  id                String       @id @default(cuid())
+  organizationId    String
+  topic             String       // orders/cancelled, returns/create, returns/update, refunds/create
+  shopifyWebhookId  String       @unique
+  address           String       // Webhook URL
+  status            String       @default("active") // active | inactive
+  lastTriggeredAt   DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, topic])
+  @@index([organizationId])
+  @@index([status])
+  @@map("shopify_webhooks")
+}
+
+model SyncState {
+  id                      String       @id @default(cuid())
+  organizationId         String       @unique
+  lastCancellationSyncAt DateTime?
+  lastReturnSyncAt        DateTime?
+  lastRefundSyncAt        DateTime?
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+  organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("sync_states")
 }

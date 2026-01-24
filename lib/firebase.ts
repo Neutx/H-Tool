@@ -38,4 +38,3 @@ export function isInviteLink(): boolean {
 export async function signInWithInviteLink(email: string) {
   return await signInWithEmailLink(auth, email, window.location.href);
 }
-

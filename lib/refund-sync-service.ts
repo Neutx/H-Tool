@@ -12,6 +12,7 @@ export interface SyncResult {
   newCount: number;
   updatedCount: number;
   errors: string[];
+  diagnostics: string[];
 }
 
 export async function syncShopifyRefunds(
@@ -24,54 +25,128 @@ export async function syncShopifyRefunds(
     newCount: 0,
     updatedCount: 0,
     errors: [],
+    diagnostics: [],
   };
 
   try {
-    // Fetch refunds from Shopify
-    const shopifyResponse = await shopify.getRecentRefunds(limit);
+    // Get sync state for incremental sync
+    let syncState = await prisma.syncState.findUnique({
+      where: { organizationId },
+    });
 
-    if (!shopifyResponse.success || !shopifyResponse.data) {
-      throw new Error("Failed to fetch refunds");
+    if (!syncState) {
+      syncState = await prisma.syncState.create({
+        data: { organizationId },
+      });
+      result.diagnostics.push("[Sync] Created new SyncState record");
     }
 
-    const refunds = ("refunds" in shopifyResponse.data && shopifyResponse.data.refunds?.edges) || [];
+    const lastSyncAt = syncState.lastRefundSyncAt || undefined;
+    if (lastSyncAt) {
+      result.diagnostics.push(`[Sync] Using incremental sync from ${lastSyncAt.toISOString()}`);
+    } else {
+      result.diagnostics.push("[Sync] First sync - fetching all refunds");
+    }
 
-    for (const edge of refunds) {
+    // Fetch refunds from Shopify using filtered endpoint
+    const shopifyResponse = await shopify.getRefunds(lastSyncAt, limit);
+
+    if (!shopifyResponse.success) {
+      // Preserve Shopify API error message
+      const errorMsg = (shopifyResponse as { success: false; error?: string }).error || "Unknown Shopify API error";
+      result.success = false;
+      result.errors.push(`Shopify API error: ${errorMsg}`);
+      result.diagnostics.push(`[Shopify] Failed to fetch refunds: ${errorMsg}`);
+      console.error("Shopify API error during refund sync:", errorMsg);
+      return result;
+    }
+
+    if (!shopifyResponse.data) {
+      result.success = false;
+      result.errors.push("No data returned from Shopify API");
+      result.diagnostics.push("[Shopify] API returned success but no data");
+      console.error("Shopify API returned success but no data");
+      return result;
+    }
+
+    // Handle both direct refunds endpoint and fallback order-scanning format
+    let refunds: any[] = [];
+    
+    if ("refunds" in shopifyResponse.data && Array.isArray(shopifyResponse.data.refunds)) {
+      // Direct /refunds.json endpoint response
+      refunds = shopifyResponse.data.refunds.map((refund: any) => ({
+        id: refund.id,
+        createdAt: refund.created_at,
+        note: refund.note || null,
+        orderId: refund.order_id,
+        transactions: refund.transactions || [],
+        refund_line_items: refund.refund_line_items || [],
+      }));
+    } else if ("refunds" in shopifyResponse.data && shopifyResponse.data.refunds?.edges) {
+      // Fallback: order-scanning format (from getRecentRefunds)
+      refunds = shopifyResponse.data.refunds.edges.map((edge: any) => edge.node);
+    }
+    
+    // If no refunds found, this is still success (just means no refunds exist in Shopify)
+    if (refunds.length === 0) {
+      result.success = true;
+      result.diagnostics.push("[Refund Sync] No refunds found in Shopify");
+      // Update sync state even if no data
+      await prisma.syncState.update({
+        where: { organizationId },
+        data: { lastRefundSyncAt: new Date() },
+      });
+      return result;
+    }
+    
+    result.diagnostics.push(`[Refund Sync] Found ${refunds.length} refund(s) to sync from Shopify`);
+
+    for (const refund of refunds) {
       try {
-        const refund = edge.node;
 
-        // Extract product names
-        const productNames =
-          refund.refundLineItems?.edges
-            ?.map((item: any) => item.node.lineItem?.name)
-            .filter(Boolean)
-            .join(", ") || "";
+        // Extract refund amount from transactions
+        const refundAmount = refund.transactions?.reduce(
+          (sum: number, txn: any) => sum + parseFloat(txn.amount || "0"),
+          0
+        ) || 0;
+
+        // Get order ID (handle both formats)
+        const shopifyOrderId = refund.orderId || refund.order?.id;
+        if (!shopifyOrderId) {
+          result.diagnostics.push(`[Error] Refund ${refund.id} missing order ID, skipping`);
+          continue;
+        }
 
         // Check if refund exists
         const existing = await prisma.refundTransaction.findFirst({
           where: { shopifyRefundId: refund.id },
         });
 
+        // Ensure order exists
+        let dbOrder = await prisma.order.findFirst({
+          where: { shopifyOrderId },
+        });
+
+        if (!dbOrder) {
+          result.diagnostics.push(`[Sync] Order ${shopifyOrderId} not found in DB, skipping refund`);
+          continue;
+        }
+
         const refundData: any = {
           shopifyRefundId: refund.id,
-          shopifyOrderId: refund.order?.id,
-          shopifyCustomerId: refund.order?.customer?.id,
-          refundAmount: parseFloat(refund.totalRefunded?.amount || "0"),
-          status: mapShopifyStatus(refund.transactions?.[0]?.status),
-          productNames: productNames || null,
+          shopifyOrderId,
+          refundAmount,
+          status: mapShopifyStatus(refund.transactions?.[0]?.status || "pending"),
           shopifySyncedAt: new Date(),
-          shopifyCreatedAt: refund.createdAt
-            ? new Date(refund.createdAt)
-            : null,
+          shopifyCreatedAt: refund.createdAt ? new Date(refund.createdAt) : null,
           shopifyNote: refund.note || null,
-          refundLineItems: refund.refundLineItems?.edges || null,
+          refundLineItems: refund.refund_line_items ? JSON.stringify(refund.refund_line_items) : null,
           syncedFromShopify: true,
           paymentProcessor: refund.transactions?.[0]?.gateway || null,
           transactionId: refund.transactions?.[0]?.id || null,
-          processedAt:
-            refund.transactions?.[0]?.processedAt
-              ? new Date(refund.transactions[0].processedAt)
-              : null,
+          processedAt: refund.transactions?.[0]?.processed_at
+            ? new Date(refund.transactions[0].processed_at)
+            : null,
         };
 
         if (existing) {
@@ -82,23 +157,17 @@ export async function syncShopifyRefunds(
           });
           result.updatedCount++;
         } else {
-          // Create new (need to create order and customer first if not exists)
-          const order = await ensureOrderExists(
-            refund.order,
-            organizationId
-          );
-
           // Find or create a cancellation record placeholder if needed
           let cancellationRecord = await prisma.cancellationRecord.findFirst({
-            where: { orderId: order.id },
+            where: { orderId: dbOrder.id },
           });
 
           if (!cancellationRecord) {
             // Create a minimal cancellation record for synced refunds
             const cancellationRequest = await prisma.cancellationRequest.create({
               data: {
-                orderId: order.id,
-                customerId: order.customerId,
+                orderId: dbOrder.id,
+                customerId: dbOrder.customerId,
                 organizationId,
                 reason: "Synced from Shopify",
                 reasonCategory: "other",
@@ -111,8 +180,8 @@ export async function syncShopifyRefunds(
             cancellationRecord = await prisma.cancellationRecord.create({
               data: {
                 cancellationRequestId: cancellationRequest.id,
-                orderId: order.id,
-                customerId: order.customerId,
+                orderId: dbOrder.id,
+                customerId: dbOrder.customerId,
                 organizationId,
                 initiatedBy: "system",
                 reason: "Synced from Shopify",
@@ -128,7 +197,7 @@ export async function syncShopifyRefunds(
           await prisma.refundTransaction.create({
             data: {
               ...refundData,
-              orderId: order.id,
+              orderId: dbOrder.id,
               cancellationRecordId: cancellationRecord.id,
             },
           });
@@ -140,105 +209,51 @@ export async function syncShopifyRefunds(
         const errorMsg =
           itemError instanceof Error ? itemError.message : String(itemError);
         result.errors.push(`Error syncing refund: ${errorMsg}`);
+        result.diagnostics.push(`[Error] Failed to sync refund ${refund.id}: ${errorMsg}`);
       }
     }
+
+    // Update sync state with latest timestamp
+    if (refunds.length > 0) {
+      const latestRefund = refunds.reduce((latest, refund) => {
+        const refundDate = refund.createdAt ? new Date(refund.createdAt) : new Date();
+        return refundDate > latest ? refundDate : latest;
+      }, new Date(0));
+
+      await prisma.syncState.update({
+        where: { organizationId },
+        data: { lastRefundSyncAt: latestRefund },
+      });
+
+      result.diagnostics.push(`[Sync] Updated sync cursor to ${latestRefund.toISOString()}`);
+    } else {
+      // No new refunds, just update timestamp
+      await prisma.syncState.update({
+        where: { organizationId },
+        data: { lastRefundSyncAt: new Date() },
+      });
+    }
+
+    result.diagnostics.push(`[Sync] Completed: ${result.syncedCount} total, ${result.newCount} new, ${result.updatedCount} updated`);
   } catch (error) {
     result.success = false;
-    result.errors.push(
-      error instanceof Error ? error.message : "Unknown error"
-    );
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    result.errors.push(errorMsg);
+    result.diagnostics.push(`[Error] Sync failed: ${errorMsg}`);
+    console.error("Error in refund sync:", error);
   }
 
   return result;
 }
 
-function mapShopifyStatus(status: string): string {
+function mapShopifyStatus(status: string | undefined): string {
+  if (!status) return "pending";
+  
   const statusMap: Record<string, string> = {
     success: "completed",
     pending: "pending",
     failure: "failed",
     error: "failed",
   };
-  return statusMap[status?.toLowerCase()] || "pending";
-}
-
-async function ensureOrderExists(shopifyOrder: any, organizationId: string) {
-  if (!shopifyOrder) {
-    throw new Error("Shopify order data is missing");
-  }
-
-  // Check if order exists
-  let order = await prisma.order.findFirst({
-    where: { shopifyOrderId: shopifyOrder.id },
-  });
-
-  if (!order) {
-    // Create customer first
-    const customer = await ensureCustomerExists(
-      shopifyOrder.customer,
-      organizationId
-    );
-
-    // Calculate total amount from line items if available
-    let totalAmount = 0;
-    if (shopifyOrder.lineItems?.edges) {
-      totalAmount = shopifyOrder.lineItems.edges.reduce(
-        (sum: number, item: any) => {
-          // Estimate price if not available
-          return sum + (item.node.quantity || 0) * 100; // Default price
-        },
-        0
-      );
-    }
-
-    order = await prisma.order.create({
-      data: {
-        shopifyOrderId: shopifyOrder.id,
-        orderNumber: shopifyOrder.name || `ORDER-${shopifyOrder.id}`,
-        customerId: customer.id,
-        organizationId,
-        status: "refunded",
-        fulfillmentStatus: "fulfilled",
-        paymentStatus: "refunded",
-        totalAmount,
-        currency: "INR",
-        orderDate: new Date(),
-      },
-    });
-  }
-
-  return order;
-}
-
-async function ensureCustomerExists(
-  shopifyCustomer: any,
-  organizationId: string
-) {
-  if (!shopifyCustomer) {
-    // Create anonymous customer
-    return prisma.customer.create({
-      data: {
-        organizationId,
-        email: "unknown@example.com",
-        name: "Unknown Customer",
-      },
-    });
-  }
-
-  let customer = await prisma.customer.findFirst({
-    where: { shopifyCustomerId: shopifyCustomer.id },
-  });
-
-  if (!customer) {
-    customer = await prisma.customer.create({
-      data: {
-        shopifyCustomerId: shopifyCustomer.id,
-        organizationId,
-        email: shopifyCustomer.email || "unknown@example.com",
-        name: shopifyCustomer.displayName || "Unknown Customer",
-      },
-    });
-  }
-
-  return customer;
+  return statusMap[status.toLowerCase()] || "pending";
 }

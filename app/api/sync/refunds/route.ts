@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { syncShopifyRefunds } from "@/lib/refund-sync-service";
+import { orchestrateShopifySync } from "@/lib/shopify-sync-orchestrator";
+import { prisma } from "@/lib/prisma";
 
 // Force Node.js runtime (Prisma requires Node.js, not Edge)
 export const runtime = "nodejs";
 
-// Demo organization ID
+// Demo organization ID (can be made dynamic later)
 const DEMO_ORG_ID = "cmkirf3lj0000jhhexsx6p1e3";
 
 export async function GET(request: NextRequest) {
@@ -32,14 +33,23 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await syncShopifyRefunds(DEMO_ORG_ID, 50);
+    // Use orchestrator to sync all data types (cancellations, returns, refunds)
+    const result = await orchestrateShopifySync(DEMO_ORG_ID, 50);
 
     return NextResponse.json({
-      message: "Refunds synced successfully",
-      ...result,
+      message: "Shopify data synced successfully",
+      success: result.success,
+      cancellations: result.cancellations,
+      returns: result.returns,
+      refunds: result.refunds,
+      totalSynced: result.totalSynced,
+      totalNew: result.totalNew,
+      totalUpdated: result.totalUpdated,
+      errors: result.allErrors,
+      diagnostics: result.allDiagnostics,
     });
   } catch (error) {
-    console.error("Refund sync error:", error);
+    console.error("Sync error:", error);
     return NextResponse.json(
       {
         success: false,
@@ -52,13 +62,26 @@ export async function GET(request: NextRequest) {
 }
 
 // Allow manual sync via POST
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const result = await syncShopifyRefunds(DEMO_ORG_ID, 50);
+    // Optional: Get organizationId from request body
+    const body = await request.json().catch(() => ({}));
+    const organizationId = body.organizationId || DEMO_ORG_ID;
+
+    // Use orchestrator to sync all data types
+    const result = await orchestrateShopifySync(organizationId, 50);
 
     return NextResponse.json({
       message: "Manual sync completed",
-      ...result,
+      success: result.success,
+      cancellations: result.cancellations,
+      returns: result.returns,
+      refunds: result.refunds,
+      totalSynced: result.totalSynced,
+      totalNew: result.totalNew,
+      totalUpdated: result.totalUpdated,
+      errors: result.allErrors,
+      diagnostics: result.allDiagnostics,
     });
   } catch (error) {
     return NextResponse.json(

@@ -99,18 +99,49 @@ export default function RefundsPage() {
   const handleSyncRefunds = async () => {
     if (!organizationId) return;
     setIsSyncing(true);
+    
+    console.log("[UI] Starting refund sync from Shopify...");
     const result = await syncRefundsFromShopify(organizationId);
 
+    // Log diagnostics from server-side processing
+    if (result.data && "diagnostics" in result.data && Array.isArray(result.data.diagnostics) && result.data.diagnostics.length > 0) {
+      console.group("[Shopify] Server-side diagnostics:");
+      result.data.diagnostics.forEach((msg: string) => {
+        if (msg.includes("error") || msg.includes("Error") || msg.includes("Failed")) {
+          console.error(msg);
+        } else if (msg.includes("warn") || msg.includes("Warning")) {
+          console.warn(msg);
+        } else {
+          console.log(msg);
+        }
+      });
+      console.groupEnd();
+    }
+
     if (result.success) {
-      toast.success(
-        `Synced ${result.data?.syncedCount || 0} refunds successfully!`,
-        { position: "bottom-left" }
-      );
+      const syncedCount = result.data?.syncedCount || 0;
+      if (syncedCount === 0) {
+        toast.info(
+          "No refunds found in Shopify. Check the browser console (F12) for detailed logs. Possible reasons: 1) No refunds exist in your store, 2) Refunds are older than the last 100 orders, 3) Refunds were processed outside Shopify. Verify in Shopify Admin: Orders → Refunds.",
+          { position: "bottom-left", duration: 8000 }
+        );
+        console.log("[UI] Sync completed but no refunds found. See diagnostics above for details.");
+      } else {
+        toast.success(
+          `Synced ${syncedCount} refunds successfully! (${result.data?.newCount || 0} new, ${result.data?.updatedCount || 0} updated)`,
+          { position: "bottom-left" }
+        );
+        console.log(`[UI] Successfully synced ${syncedCount} refunds`);
+      }
       await loadData(); // Reload dashboard data
     } else {
-      toast.error(result.error || "Sync failed", {
-        position: "bottom-left",
-      });
+      const errorMsg = result.error || "Sync failed";
+      const errorDetails = result.data?.errors?.join(", ") || "";
+      toast.error(
+        errorDetails ? `${errorMsg}: ${errorDetails}` : errorMsg,
+        { position: "bottom-left", duration: 6000 }
+      );
+      console.error("[UI] Sync failed:", errorMsg, errorDetails);
     }
 
     setIsSyncing(false);

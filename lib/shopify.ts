@@ -44,22 +44,77 @@ class ShopifyClient {
         },
       });
 
-      const data = await response.json();
+      // Check content type before parsing JSON
+      const contentType = response.headers.get("content-type");
+      let data: any;
+
+      if (contentType && contentType.includes("application/json")) {
+        try {
+          data = await response.json();
+        } catch (jsonError) {
+          console.error("Failed to parse JSON response:", jsonError);
+          const text = await response.text();
+          return {
+            success: false,
+            error: `Invalid JSON response from Shopify API. Status: ${response.status}. Response: ${text.substring(0, 200)}`,
+          };
+        }
+      } else {
+        // Non-JSON response (e.g., HTML error page)
+        const text = await response.text();
+        return {
+          success: false,
+          error: `Non-JSON response from Shopify API. Status: ${response.status}. Response: ${text.substring(0, 200)}`,
+        };
+      }
 
       if (!response.ok) {
         const error = data as ShopifyError;
+        // Extract error message from various Shopify error formats
+        let errorMessage = "Shopify API error";
+        
+        if (error.message) {
+          errorMessage = error.message;
+        } else if (error.errors) {
+          if (typeof error.errors === "string") {
+            errorMessage = error.errors;
+          } else if (Array.isArray(error.errors)) {
+            errorMessage = error.errors.join(", ");
+          } else if (typeof error.errors === "object") {
+            // Shopify sometimes returns errors as an object with field names
+            const errorParts = Object.entries(error.errors).map(([key, value]) => {
+              if (Array.isArray(value)) {
+                return `${key}: ${value.join(", ")}`;
+              }
+              return `${key}: ${value}`;
+            });
+            errorMessage = errorParts.join("; ");
+          }
+        }
+
+        // Add HTTP status code for better debugging
+        const statusText = response.statusText || `HTTP ${response.status}`;
         return {
           success: false,
-          error: error.message || error.errors || "Shopify API error",
+          error: `Shopify API error (${statusText}): ${errorMessage}`,
         };
       }
 
       return { success: true, data: data as T };
     } catch (error) {
       console.error("Shopify API error:", error);
+      
+      // Handle network errors specifically
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        return {
+          success: false,
+          error: `Network error: Unable to connect to Shopify API. Please check your internet connection and Shopify store URL.`,
+        };
+      }
+
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Unknown error occurred",
       };
     }
   }
@@ -193,14 +248,38 @@ class ShopifyClient {
       );
 
       if (!ordersResponse.success || !ordersResponse.data) {
+        console.error("[Shopify] Failed to fetch orders:", ordersResponse.error || "Unknown error");
         return ordersResponse;
       }
 
       // Fetch refunds for each order
       const refunds: any[] = [];
       const orders = ordersResponse.data.orders.slice(0, 100); // Limit to 100 orders
+      const diagnostics: string[] = [];
+      
+      diagnostics.push(`[Shopify] Fetched ${orders.length} orders from Shopify`);
+      console.log(`[Shopify] Fetched ${orders.length} orders from Shopify`);
+      
+      if (orders.length === 0) {
+        diagnostics.push("[Shopify] No orders found in Shopify store");
+        console.log("[Shopify] No orders found in Shopify store");
+        return {
+          success: true,
+          data: {
+            refunds: {
+              edges: [],
+            },
+            _diagnostics: diagnostics,
+          },
+        };
+      }
+
+      let ordersWithRefunds = 0;
+      let ordersChecked = 0;
+      let totalRefundsFound = 0;
 
       for (const order of orders) {
+        ordersChecked++;
         const refundsResponse = await this.request<{
           refunds: Array<{
             id: string;
@@ -224,7 +303,16 @@ class ShopifyClient {
           method: "GET",
         });
 
-        if (refundsResponse.success && refundsResponse.data?.refunds) {
+        if (!refundsResponse.success) {
+          // Log error but continue checking other orders
+          const errorMsg = refundsResponse.error || "Unknown error";
+          diagnostics.push(`[Shopify] Failed to fetch refunds for order ${order.id} (${order.name}): ${errorMsg}`);
+          console.warn(`[Shopify] Failed to fetch refunds for order ${order.id} (${order.name}):`, errorMsg);
+        } else if (refundsResponse.data?.refunds && refundsResponse.data.refunds.length > 0) {
+          ordersWithRefunds++;
+          totalRefundsFound += refundsResponse.data.refunds.length;
+          diagnostics.push(`[Shopify] Found ${refundsResponse.data.refunds.length} refund(s) for order ${order.id} (${order.name})`);
+          console.log(`[Shopify] Found ${refundsResponse.data.refunds.length} refund(s) for order ${order.id} (${order.name})`);
           for (const refund of refundsResponse.data.refunds) {
             // Calculate total refunded amount
             const totalRefunded = refund.transactions.reduce(
@@ -301,6 +389,10 @@ class ShopifyClient {
         if (refunds.length >= limit) break;
       }
 
+      const summaryMsg = `[Shopify] Summary: Checked ${ordersChecked} orders, found refunds in ${ordersWithRefunds} orders, total refunds: ${totalRefundsFound}, returning ${refunds.length}`;
+      diagnostics.push(summaryMsg);
+      console.log(summaryMsg);
+
       // Sort by created_at descending and limit
       refunds.sort(
         (a, b) =>
@@ -315,6 +407,7 @@ class ShopifyClient {
               node: refund,
             })),
           },
+          _diagnostics: diagnostics,
         },
       };
     } catch (error) {
@@ -324,6 +417,179 @@ class ShopifyClient {
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
+  }
+
+  /**
+   * Get cancelled orders with filtered query (production-grade)
+   * Uses cancelled_at_min filter to only fetch cancelled orders
+   */
+  async getCancelledOrders(lastSyncAt?: Date, limit: number = 50) {
+    const params = new URLSearchParams({
+      status: "any",
+      financial_status: "any",
+      fulfillment_status: "any",
+      limit: limit.toString(),
+      order: "cancelled_at desc",
+    });
+
+    if (lastSyncAt) {
+      params.append("cancelled_at_min", lastSyncAt.toISOString());
+    }
+
+    return this.request<{
+      orders: Array<{
+        id: string;
+        name: string;
+        cancelled_at: string;
+        cancel_reason: string | null;
+        customer: {
+          id: string;
+          email: string;
+          first_name: string;
+          last_name: string;
+        } | null;
+        line_items: Array<{
+          id: string;
+          name: string;
+          quantity: number;
+          price: string;
+        }>;
+        total_price: string;
+        currency: string;
+      }>;
+    }>(`/orders.json?${params.toString()}`, {
+      method: "GET",
+    });
+  }
+
+  /**
+   * Get returns from Shopify Returns API
+   * Note: This uses the Returns API, not scanning orders
+   */
+  async getReturns(lastSyncAt?: Date, limit: number = 50) {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+    });
+
+    if (lastSyncAt) {
+      params.append("created_at_min", lastSyncAt.toISOString());
+    }
+
+    return this.request<{
+      returns: Array<{
+        id: string;
+        order_id: string;
+        status: string;
+        created_at: string;
+        received_at: string | null;
+        return_line_items: Array<{
+          id: string;
+          line_item_id: string;
+          quantity: number;
+          reason: string | null;
+        }>;
+      }>;
+    }>(`/returns.json?${params.toString()}`, {
+      method: "GET",
+    });
+  }
+
+  /**
+   * Get refunds using filtered endpoint (if available)
+   * Falls back to order scanning if /refunds.json doesn't exist
+   */
+  async getRefunds(lastSyncAt?: Date, limit: number = 50) {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+    });
+
+    if (lastSyncAt) {
+      params.append("created_at_min", lastSyncAt.toISOString());
+    }
+
+    // Try the direct refunds endpoint first
+    const refundsResponse = await this.request<{
+      refunds: Array<{
+        id: string;
+        order_id: string;
+        created_at: string;
+        note: string | null;
+        transactions: Array<{
+          id: string;
+          status: string;
+          amount: string;
+          gateway: string;
+          processed_at: string;
+        }>;
+        refund_line_items: Array<{
+          line_item_id: string;
+          quantity: number;
+          restock_type: string;
+        }>;
+      }>;
+    }>(`/refunds.json?${params.toString()}`, {
+      method: "GET",
+    });
+
+    // If refunds endpoint doesn't exist, fall back to old method
+    if (!refundsResponse.success && refundsResponse.error?.includes("404")) {
+      console.warn("[Shopify] /refunds.json endpoint not available, using order scanning fallback");
+      return this.getRecentRefunds(limit);
+    }
+
+    return refundsResponse;
+  }
+
+  /**
+   * Register a webhook with Shopify
+   */
+  async registerWebhook(topic: string, address: string) {
+    return this.request<{
+      webhook: {
+        id: string;
+        topic: string;
+        address: string;
+        format: string;
+        created_at: string;
+        updated_at: string;
+      };
+    }>(`/webhooks.json`, {
+      method: "POST",
+      body: JSON.stringify({
+        webhook: {
+          topic,
+          address,
+          format: "json",
+        },
+      }),
+    });
+  }
+
+  /**
+   * List all webhooks
+   */
+  async listWebhooks() {
+    return this.request<{
+      webhooks: Array<{
+        id: string;
+        topic: string;
+        address: string;
+        format: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }>(`/webhooks.json`, {
+      method: "GET",
+    });
+  }
+
+  /**
+   * Delete a webhook by ID
+   */
+  async deleteWebhook(webhookId: string) {
+    return this.request(`/webhooks/${webhookId}.json`, {
+      method: "DELETE",
+    });
   }
 
   /**

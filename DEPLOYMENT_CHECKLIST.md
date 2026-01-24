@@ -42,6 +42,10 @@ Ensure all required environment variables are set in Vercel:
 - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
 - `NEXT_PUBLIC_FIREBASE_APP_ID`
 - `CRON_SECRET` - For scheduled sync jobs
+- `SHOPIFY_ACCESS_TOKEN` - Shopify API access token
+- `SHOPIFY_STORE_URL` - Your Shopify store URL (e.g., "your-store.myshopify.com")
+- `SHOPIFY_API_VERSION` - Shopify API version (e.g., "2026-01")
+- `SHOPIFY_WEBHOOK_SECRET` - Webhook signing secret from Shopify (get after registering webhooks)
 
 **Optional (for Firebase Admin SDK):**
 - `FIREBASE_ADMIN_PROJECT_ID`

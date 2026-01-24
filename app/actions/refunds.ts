@@ -404,18 +404,31 @@ export async function syncRefundsFromShopify(organizationId: string) {
       revalidatePath("/refunds");
     }
 
+    // Include error details in response
+    const errorMessage = result.errors.length > 0 
+      ? result.errors.join("; ") 
+      : undefined;
+
     return {
       success: result.success,
       message: result.success
         ? `Synced ${result.syncedCount} refunds (${result.newCount} new, ${result.updatedCount} updated)`
         : "Sync failed",
+      error: errorMessage,
       data: result,
     };
   } catch (error) {
     console.error("Manual sync error:", error);
+    const errorMsg = error instanceof Error ? error.message : "Failed to trigger sync";
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to trigger sync",
+      error: errorMsg,
+      data: { 
+        errors: [errorMsg], 
+        syncedCount: 0, 
+        newCount: 0, 
+        updatedCount: 0 
+      },
     };
   }
 }
