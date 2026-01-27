@@ -20,16 +20,18 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Copy, Trash2, UserPlus, Users, Settings, Link as LinkIcon, Mail, CheckCircle2, Webhook, RefreshCw, X } from "lucide-react";
+import { Building2, Copy, Trash2, UserPlus, Users, Settings, Link as LinkIcon, Mail, CheckCircle2, Webhook, RefreshCw, X, ChevronDown, ChevronUp, AlertCircle, CheckCircle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { TeamMemberRole } from "@prisma/client";
 import type { TeamMember, OrganizationInvite } from "@prisma/client";
 import {
   registerShopifyWebhooks,
+  registerSingleWebhook,
   listShopifyWebhooks,
   deleteShopifyWebhook,
   deleteAllShopifyWebhooks,
   syncWebhookStatus,
+  triggerShopifyWebhookTest,
 } from "@/app/actions/shopify-webhooks";
 
 export default function AdminPage() {
@@ -49,8 +51,15 @@ export default function AdminPage() {
     status: string;
     shopifyWebhookId: string;
     lastTriggeredAt: Date | null;
+    lastTestedAt?: Date | null;
+    testStatus?: string;
+    hasReceivedData?: boolean;
+    isRegistered?: boolean;
   }>>([]);
   const [webhooksLoading, setWebhooksLoading] = useState(false);
+  const [webhookTesting, setWebhookTesting] = useState<string | null>(null);
+  const [registeringWebhook, setRegisteringWebhook] = useState<string | null>(null);
+  const [expandedIntegrations, setExpandedIntegrations] = useState<Record<string, boolean>>({});
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState("");
@@ -128,6 +137,25 @@ export default function AdminPage() {
       console.error(error);
     } finally {
       setWebhooksLoading(false);
+    }
+  };
+
+  const handleRegisterSingleWebhook = async (topic: string) => {
+    if (!activeOrganization) return;
+    setRegisteringWebhook(topic);
+    try {
+      const result = await registerSingleWebhook(activeOrganization.id, topic);
+      if (result.success) {
+        toast.success(`${topic} webhook registered!`);
+        await loadWebhooks();
+      } else {
+        toast.error(result.error || "Failed to register webhook");
+      }
+    } catch (error) {
+      toast.error("An error occurred");
+      console.error(error);
+    } finally {
+      setRegisteringWebhook(null);
     }
   };
 
@@ -342,6 +370,38 @@ export default function AdminPage() {
     return roleMap[role] || { variant: "outline" as const, label: role };
   };
 
+  const toggleIntegration = (id: string) => {
+    setExpandedIntegrations(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const handleCopyUrl = (url: string) => {
+    navigator.clipboard.writeText(url);
+    toast.success("Webhook URL copied to clipboard");
+  };
+
+  const handleTestWebhook = async (webhookId: string) => {
+    if (!activeOrganization) return;
+    setWebhookTesting(webhookId);
+    try {
+      const result = await triggerShopifyWebhookTest(webhookId, activeOrganization.id);
+      if (result.success) {
+        toast.success("Test webhook triggered successfully");
+        // Reload webhooks to update status
+        setTimeout(() => loadWebhooks(), 2000);
+      } else {
+        toast.error(result.error || "Failed to trigger test webhook");
+      }
+    } catch (error) {
+      console.error("Error testing webhook:", error);
+      toast.error("Failed to test webhook");
+    } finally {
+      setWebhookTesting(null);
+    }
+  };
+
   if (!activeOrganization) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -372,10 +432,6 @@ export default function AdminPage() {
           <TabsTrigger value="integrations">
             <LinkIcon className="mr-2 h-4 w-4" />
             Integrations
-          </TabsTrigger>
-          <TabsTrigger value="webhooks">
-            <Webhook className="mr-2 h-4 w-4" />
-            Webhooks
           </TabsTrigger>
         </TabsList>
 
@@ -661,17 +717,178 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="rounded-lg border p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold">Shopify</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {organization?.shopifyStoreUrl || "Not configured"}
-                      </p>
+                {/* Shopify Integration */}
+                <div className="rounded-lg border overflow-hidden">
+                  <div 
+                    className="p-4 flex items-center justify-between cursor-pointer bg-card hover:bg-accent/50 transition-colors"
+                    onClick={() => toggleIntegration("shopify")}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="bg-[#95BF47] p-2 rounded-md text-white">
+                        <Building2 className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold">Shopify</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {organization?.shopifyStoreUrl || "Not configured"}
+                        </p>
+                      </div>
                     </div>
-                    <Badge variant="outline">Connected</Badge>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant={organization?.shopifyStoreUrl ? "default" : "outline"}>
+                        {organization?.shopifyStoreUrl ? "Connected" : "Not Configured"}
+                      </Badge>
+                      <Button variant="ghost" size="sm">
+                        {expandedIntegrations["shopify"] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
+
+                  {expandedIntegrations["shopify"] && (
+                    <div className="border-t p-4 bg-muted/20 space-y-6">
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-medium">Webhooks Configuration</h4>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSyncWebhookStatus();
+                              }}
+                              disabled={webhooksLoading}
+                            >
+                              <RefreshCw className={`mr-2 h-4 w-4 ${webhooksLoading ? "animate-spin" : ""}`} />
+                              Sync Status
+                            </Button>
+                          </div>
+                        </div>
+
+                        {!organization?.shopifyStoreUrl ? (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-4">
+                            <p className="text-sm text-amber-800 dark:text-amber-200">
+                              Please configure your Shopify Store URL in Organization settings before configuring webhooks.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <div className="grid gap-4">
+                              {webhooks.map((webhook) => {
+                                const isRegistered = webhook.isRegistered;
+                                const hasReceivedData = webhook.hasReceivedData;
+                                const isRegistering = registeringWebhook === webhook.topic;
+                                const isTesting = webhookTesting === webhook.id;
+                                
+                                // Status indicator logic
+                                let statusDot = "bg-gray-400"; // Not registered
+                                let statusText = "Not Registered";
+                                let statusTooltip = "Click Register to activate this webhook";
+                                
+                                if (isRegistered && hasReceivedData) {
+                                  statusDot = "bg-green-500";
+                                  statusText = "Connected";
+                                  statusTooltip = "Webhook is active and receiving data";
+                                } else if (isRegistered && !hasReceivedData) {
+                                  statusDot = "bg-orange-500";
+                                  statusText = "Waiting on data";
+                                  statusTooltip = "Webhook registered but hasn't received any data yet";
+                                }
+                                  
+                                return (
+                                  <div key={webhook.id} className="border rounded-lg p-4 bg-background">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center space-x-2">
+                                        <div 
+                                          className={`h-2.5 w-2.5 rounded-full ${statusDot}`} 
+                                          title={statusTooltip}
+                                        />
+                                        <span className="font-medium">{webhook.topic}</span>
+                                        <Badge variant={hasReceivedData ? "default" : "outline"} className="text-xs">
+                                          {statusText}
+                                        </Badge>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        {!isRegistered ? (
+                                          <Button
+                                            variant="default"
+                                            size="sm"
+                                            onClick={() => handleRegisterSingleWebhook(webhook.topic)}
+                                            disabled={isRegistering}
+                                          >
+                                            {isRegistering ? (
+                                              <>
+                                                <RefreshCw className="mr-2 h-3 w-3 animate-spin" />
+                                                Registering...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Webhook className="mr-2 h-3 w-3" />
+                                                Register
+                                              </>
+                                            )}
+                                          </Button>
+                                        ) : (
+                                          <>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => handleTestWebhook(webhook.id)}
+                                              disabled={isTesting}
+                                            >
+                                              {isTesting ? (
+                                                <RefreshCw className="mr-2 h-3 w-3 animate-spin" />
+                                              ) : (
+                                                <CheckCircle2 className="mr-2 h-3 w-3" />
+                                              )}
+                                              Test
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => handleDeleteWebhook(webhook.id)}
+                                              className="text-destructive hover:text-destructive"
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </Button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                      
+                                      <div className="flex items-center space-x-2 bg-muted p-2 rounded text-sm">
+                                        <code className="flex-1 overflow-hidden text-ellipsis text-xs font-mono">
+                                          {webhook.address}
+                                        </code>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6"
+                                          onClick={() => handleCopyUrl(webhook.address)}
+                                        >
+                                          <Copy className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                      
+                                      <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                                        <span>
+                                          Last triggered: {webhook.lastTriggeredAt ? new Date(webhook.lastTriggeredAt).toLocaleString() : "Never"}
+                                        </span>
+                                        <span>
+                                          Last tested: {webhook.lastTestedAt ? new Date(webhook.lastTestedAt).toLocaleString() : "Never"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
+
                 <div className="rounded-lg border p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -684,137 +901,6 @@ export default function AdminPage() {
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="webhooks" className="space-y-6 mt-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Shopify Webhooks</CardTitle>
-                  <CardDescription>
-                    Real-time data sync from Shopify. Register webhooks to receive instant updates.
-                  </CardDescription>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSyncWebhookStatus}
-                    disabled={webhooksLoading}
-                  >
-                    <RefreshCw className={`mr-2 h-4 w-4 ${webhooksLoading ? "animate-spin" : ""}`} />
-                    Sync Status
-                  </Button>
-                  <Button
-                    onClick={handleRegisterWebhooks}
-                    disabled={webhooksLoading || !organization?.shopifyStoreUrl}
-                  >
-                    <Webhook className="mr-2 h-4 w-4" />
-                    Register All Webhooks
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {!organization?.shopifyStoreUrl ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-4">
-                  <p className="text-sm text-amber-800 dark:text-amber-200">
-                    Please configure your Shopify Store URL in Organization settings before registering webhooks.
-                  </p>
-                </div>
-              ) : webhooksLoading ? (
-                <p className="text-muted-foreground">Loading webhooks...</p>
-              ) : webhooks.length === 0 ? (
-                <div className="space-y-4">
-                  <div className="rounded-lg border p-4 text-center">
-                    <p className="text-muted-foreground mb-4">
-                      No webhooks registered. Click &quot;Register All Webhooks&quot; to set up real-time sync.
-                    </p>
-                    <Button onClick={handleRegisterWebhooks} disabled={webhooksLoading}>
-                      <Webhook className="mr-2 h-4 w-4" />
-                      Register All Webhooks
-                    </Button>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <h4 className="font-semibold mb-2">Webhook URLs</h4>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="font-medium">orders/cancelled:</span>{" "}
-                        <code className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
-                          {typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/shopify/orders-cancelled` : ""}
-                        </code>
-                      </div>
-                      <div>
-                        <span className="font-medium">returns/create:</span>{" "}
-                        <code className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
-                          {typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/shopify/returns-create` : ""}
-                        </code>
-                      </div>
-                      <div>
-                        <span className="font-medium">returns/update:</span>{" "}
-                        <code className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
-                          {typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/shopify/returns-update` : ""}
-                        </code>
-                      </div>
-                      <div>
-                        <span className="font-medium">refunds/create:</span>{" "}
-                        <code className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
-                          {typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/shopify/refunds-create` : ""}
-                        </code>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    {webhooks.map((webhook) => (
-                      <div
-                        key={webhook.id}
-                        className="flex items-center justify-between rounded-lg border p-4"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-2">
-                            <Badge variant={webhook.status === "active" ? "default" : "secondary"}>
-                              {webhook.status}
-                            </Badge>
-                            <span className="font-medium">{webhook.topic}</span>
-                          </div>
-                          <p className="text-sm text-muted-foreground break-all">
-                            {webhook.address}
-                          </p>
-                          {webhook.lastTriggeredAt && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Last triggered: {new Date(webhook.lastTriggeredAt).toLocaleString()}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteWebhook(webhook.id)}
-                          disabled={webhooksLoading}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  {webhooks.length > 0 && (
-                    <Button
-                      variant="destructive"
-                      onClick={handleDeleteAllWebhooks}
-                      disabled={webhooksLoading}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete All Webhooks
-                    </Button>
-                  )}
-                </div>
-              )}
             </CardContent>
           </Card>
         </TabsContent>

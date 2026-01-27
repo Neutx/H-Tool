@@ -4,7 +4,7 @@
  * Uses filtered API endpoint for efficient syncing
  */
 
-import { shopify } from "./shopify";
+import { shopify, extractShopifyId } from "./shopify";
 import { prisma } from "./prisma";
 
 export interface CancellationSyncResult {
@@ -87,22 +87,26 @@ export async function syncShopifyCancellations(
     // Process each cancelled order
     for (const order of cancelledOrders) {
       try {
+        // Extract numeric ID from GID format
+        const orderIdNumeric = extractShopifyId(order.id);
+        const orderIdBigInt = BigInt(orderIdNumeric);
+
         // Ensure order exists in our DB first
         let dbOrder = await prisma.order.findFirst({
-          where: { shopifyOrderId: order.id },
+          where: { shopifyOrderId: orderIdBigInt },
         });
 
         if (!dbOrder) {
           // Order doesn't exist, we need to create it
           // This requires customer and organization data
           // For now, skip if order doesn't exist (could be enhanced later)
-          result.diagnostics.push(`[Sync] Order ${order.id} not found in DB, skipping cancellation`);
+          result.diagnostics.push(`[Sync] Order ${orderIdNumeric} not found in DB, skipping cancellation`);
           continue;
         }
 
         // Check if cancellation already exists
         const existing = await prisma.shopifyCancellation.findUnique({
-          where: { shopifyCancellationId: order.id },
+          where: { shopifyCancellationId: orderIdBigInt },
         });
 
         const cancelledAt = new Date(order.cancelled_at);
@@ -131,8 +135,8 @@ export async function syncShopifyCancellations(
           // Create new cancellation
           await prisma.shopifyCancellation.create({
             data: {
-              shopifyCancellationId: order.id,
-              shopifyOrderId: order.id,
+              shopifyCancellationId: orderIdBigInt,
+              shopifyOrderId: orderIdBigInt,
               cancelledAt,
               cancelReason: order.cancel_reason || null,
             },
@@ -153,8 +157,9 @@ export async function syncShopifyCancellations(
         result.syncedCount++;
       } catch (itemError) {
         const errorMsg = itemError instanceof Error ? itemError.message : String(itemError);
-        result.errors.push(`Error syncing cancellation for order ${order.id}: ${errorMsg}`);
-        result.diagnostics.push(`[Error] Failed to sync order ${order.id}: ${errorMsg}`);
+        const orderIdNumeric = extractShopifyId(order.id);
+        result.errors.push(`Error syncing cancellation for order ${orderIdNumeric}: ${errorMsg}`);
+        result.diagnostics.push(`[Error] Failed to sync order ${orderIdNumeric}: ${errorMsg}`);
       }
     }
 

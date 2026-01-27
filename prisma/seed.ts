@@ -245,7 +245,7 @@ async function main() {
   const orders = await Promise.all([
     prisma.order.create({
       data: {
-        shopifyOrderId: "6234567890123",
+        shopifyOrderId: BigInt("6234567890123"),
         orderNumber: "ORD-1001",
         status: "open",
         fulfillmentStatus: "unfulfilled",
@@ -294,7 +294,7 @@ async function main() {
     }),
     prisma.order.create({
       data: {
-        shopifyOrderId: "6234567890124",
+        shopifyOrderId: BigInt("6234567890124"),
         orderNumber: "ORD-1002",
         status: "pending",
         fulfillmentStatus: "unfulfilled",

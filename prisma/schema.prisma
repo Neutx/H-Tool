@@ -28,6 +28,7 @@ model Organization {
   invites              OrganizationInvite[]
   shopifyWebhooks      ShopifyWebhook[]
   syncState            SyncState?
+  webhookEvents        WebhookEvent[]
 
   @@map("organizations")
 }
@@ -89,7 +90,7 @@ model Customer {
 
 model Order {
   id                   String                @id @default(cuid())
-  shopifyOrderId       String?               @unique
+  shopifyOrderId       BigInt?               @unique
   orderNumber          String
   status               String
   fulfillmentStatus    String
@@ -229,7 +230,7 @@ model RefundTransaction {
   id                   String             @id @default(cuid())
   cancellationRecordId String
   orderId              String
-  shopifyRefundId      String?
+  shopifyRefundId      BigInt?
   refundAmount         Float
   taxAmount            Float?
   shippingAmount       Float?
@@ -248,7 +249,7 @@ model RefundTransaction {
   shopifyCreatedAt     DateTime?
   shopifyCustomerId    String?
   shopifyNote          String?
-  shopifyOrderId       String?
+  shopifyOrderId       BigInt?
   shopifySyncedAt      DateTime?
   syncedFromShopify    Boolean            @default(false)
   cancellationRecord   CancellationRecord @relation(fields: [cancellationRecordId], references: [id])
@@ -423,8 +424,8 @@ model UserSession {
 
 model ShopifyCancellation {
   id                    String   @id @default(cuid())
-  shopifyCancellationId String   @unique
-  shopifyOrderId        String   @unique
+  shopifyCancellationId BigInt   @unique
+  shopifyOrderId        BigInt   @unique
   cancelledAt           DateTime
   cancelReason          String?
   staffNote             String?
@@ -439,8 +440,8 @@ model ShopifyCancellation {
 
 model ShopifyReturn {
   id               String              @id @default(cuid())
-  shopifyReturnId  String              @unique
-  shopifyOrderId   String
+  shopifyReturnId  BigInt              @unique
+  shopifyOrderId   BigInt
   status           String              // REQUESTED | APPROVED | RECEIVED | DECLINED
   requestedAt      DateTime
   receivedAt       DateTime?
@@ -477,6 +478,9 @@ model ShopifyWebhook {
   address           String       // Webhook URL
   status            String       @default("active") // active | inactive
   lastTriggeredAt   DateTime?
+  lastTestedAt      DateTime?
+  testStatus        String       @default("not_tested") // not_tested | testing | success | failed
+  lastTestResult    Json?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -498,4 +502,23 @@ model SyncState {
   organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("sync_states")
+}
+
+model WebhookEvent {
+  id              String       @id @default(cuid())
+  organizationId  String
+  topic           String
+  shopifyWebhookId String?
+  payload         Json
+  headers         Json?
+  processedAt     DateTime     @default(now())
+  success         Boolean      @default(true)
+  errorMessage    String?
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([topic])
+  @@index([processedAt])
+  @@map("webhook_events")
 }

@@ -16,6 +16,10 @@ interface WebhookInfo {
   status: string;
   shopifyWebhookId: string;
   lastTriggeredAt: Date | null;
+  lastTestedAt?: Date | null;
+  testStatus?: string;
+  hasReceivedData?: boolean;
+  isRegistered?: boolean;
 }
 
 /**
@@ -32,9 +36,9 @@ function getWebhookBaseUrl(): string {
 function getWebhookUrl(topic: string): string {
   const baseUrl = getWebhookBaseUrl();
   const topicMap: Record<string, string> = {
+    "orders/create": `${baseUrl}/api/webhooks/shopify/orders-create`,
+    "orders/update": `${baseUrl}/api/webhooks/shopify/orders-update`,
     "orders/cancelled": `${baseUrl}/api/webhooks/shopify/orders-cancelled`,
-    "returns/create": `${baseUrl}/api/webhooks/shopify/returns-create`,
-    "returns/update": `${baseUrl}/api/webhooks/shopify/returns-update`,
     "refunds/create": `${baseUrl}/api/webhooks/shopify/refunds-create`,
   };
   return topicMap[topic] || `${baseUrl}/api/webhooks/shopify/${topic.replace("/", "-")}`;
@@ -59,9 +63,9 @@ export async function registerShopifyWebhooks(
     }
 
     const topics = [
+      "orders/create",
+      "orders/update",
       "orders/cancelled",
-      "returns/create",
-      "returns/update",
       "refunds/create",
     ];
 
@@ -148,17 +152,113 @@ export async function registerShopifyWebhooks(
 }
 
 /**
+ * Register a single webhook for an organization
+ */
+export async function registerSingleWebhook(
+  organizationId: string,
+  topic: string
+): Promise<ActionResult<WebhookInfo>> {
+  try {
+    const webhookUrl = getWebhookUrl(topic);
+
+    // Check if webhook already exists
+    const existing = await prisma.shopifyWebhook.findUnique({
+      where: {
+        organizationId_topic: {
+          organizationId,
+          topic,
+        },
+      },
+    });
+
+    if (existing) {
+      // Delete old webhook from Shopify
+      await shopify.deleteWebhook(existing.shopifyWebhookId);
+      await prisma.shopifyWebhook.delete({
+        where: { id: existing.id },
+      });
+    }
+
+    // Register new webhook with Shopify
+    const response = await shopify.registerWebhook(topic, webhookUrl);
+
+    if (response.success && response.data?.webhook) {
+      const webhook = response.data.webhook;
+
+      // Store in database
+      const dbWebhook = await prisma.shopifyWebhook.create({
+        data: {
+          organizationId,
+          topic,
+          shopifyWebhookId: webhook.id,
+          address: webhook.address,
+          status: "active",
+        },
+      });
+
+      return {
+        success: true,
+        data: {
+          id: dbWebhook.id,
+          topic: dbWebhook.topic,
+          address: dbWebhook.address,
+          status: dbWebhook.status,
+          shopifyWebhookId: dbWebhook.shopifyWebhookId,
+          lastTriggeredAt: dbWebhook.lastTriggeredAt,
+          lastTestedAt: dbWebhook.lastTestedAt,
+          testStatus: dbWebhook.testStatus,
+          hasReceivedData: false,
+          isRegistered: true,
+        },
+      };
+    } else {
+      return {
+        success: false,
+        error: `Failed to register webhook: ${response.error || "Unknown error"}`,
+      };
+    }
+  } catch (error) {
+    console.error(`Error registering webhook ${topic}:`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to register webhook",
+    };
+  }
+}
+
+/**
  * List all webhooks for an organization
  */
 export async function listShopifyWebhooks(
   organizationId: string
 ): Promise<ActionResult<WebhookInfo[]>> {
   try {
+    const requiredTopics = [
+      "orders/create",
+      "orders/update",
+      "orders/cancelled",
+      "refunds/create",
+    ];
+
     // Get webhooks from database
     const dbWebhooks = await prisma.shopifyWebhook.findMany({
       where: { organizationId },
       orderBy: { topic: "asc" },
     });
+
+    // Check which webhooks have received data
+    const webhookEvents = await prisma.webhookEvent.groupBy({
+      by: ['topic'],
+      where: {
+        organizationId,
+        topic: { in: requiredTopics },
+      },
+      _count: {
+        id: true,
+      },
+    });
+
+    const topicsWithData = new Set(webhookEvents.map(e => e.topic));
 
     // Also fetch from Shopify to sync status
     const shopifyResponse = await shopify.listWebhooks();
@@ -166,30 +266,55 @@ export async function listShopifyWebhooks(
       ? shopifyResponse.data.webhooks
       : [];
 
-    // Merge data
-    const webhooks: WebhookInfo[] = dbWebhooks.map((dbWebhook) => {
-      const shopifyWebhook = shopifyWebhooks.find(
-        (sw) => sw.id === dbWebhook.shopifyWebhookId
-      );
+    // Build webhook info for all required topics
+    const webhooks: WebhookInfo[] = requiredTopics.map((topic) => {
+      const dbWebhook = dbWebhooks.find((w) => w.topic === topic);
+      const hasReceivedData = topicsWithData.has(topic);
+      
+      if (dbWebhook) {
+        const shopifyWebhook = shopifyWebhooks.find(
+          (sw) => sw.id === dbWebhook.shopifyWebhookId
+        );
 
-      return {
-        id: dbWebhook.id,
-        topic: dbWebhook.topic,
-        address: dbWebhook.address,
-        status: shopifyWebhook ? "active" : dbWebhook.status,
-        shopifyWebhookId: dbWebhook.shopifyWebhookId,
-        lastTriggeredAt: dbWebhook.lastTriggeredAt,
-      };
+        return {
+          id: dbWebhook.id,
+          topic: dbWebhook.topic,
+          address: dbWebhook.address,
+          status: shopifyWebhook ? "active" : dbWebhook.status,
+          shopifyWebhookId: dbWebhook.shopifyWebhookId,
+          lastTriggeredAt: dbWebhook.lastTriggeredAt,
+          lastTestedAt: dbWebhook.lastTestedAt,
+          testStatus: dbWebhook.testStatus,
+          hasReceivedData,
+          isRegistered: true,
+        };
+      } else {
+        // Webhook not registered yet
+        return {
+          id: `unregistered-${topic}`,
+          topic,
+          address: getWebhookUrl(topic),
+          status: "not_registered",
+          shopifyWebhookId: "",
+          lastTriggeredAt: null,
+          lastTestedAt: null,
+          testStatus: "not_tested",
+          hasReceivedData: false,
+          isRegistered: false,
+        };
+      }
     });
 
     // Update status in DB if changed
     for (const webhook of webhooks) {
-      const dbWebhook = dbWebhooks.find((w) => w.id === webhook.id);
-      if (dbWebhook && dbWebhook.status !== webhook.status) {
-        await prisma.shopifyWebhook.update({
-          where: { id: webhook.id },
-          data: { status: webhook.status },
-        });
+      if (webhook.isRegistered) {
+        const dbWebhook = dbWebhooks.find((w) => w.id === webhook.id);
+        if (dbWebhook && dbWebhook.status !== webhook.status) {
+          await prisma.shopifyWebhook.update({
+            where: { id: webhook.id },
+            data: { status: webhook.status },
+          });
+        }
       }
     }
 
@@ -333,6 +458,53 @@ export async function syncWebhookStatus(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to sync webhook status",
+    };
+  }
+}
+
+/**
+ * Trigger a test webhook from Shopify
+ */
+export async function triggerShopifyWebhookTest(
+  webhookId: string,
+  organizationId: string
+): Promise<ActionResult<void>> {
+  try {
+    const webhook = await prisma.shopifyWebhook.findUnique({
+      where: { id: webhookId },
+    });
+
+    if (!webhook || webhook.organizationId !== organizationId) {
+      return {
+        success: false,
+        error: "Webhook not found or access denied",
+      };
+    }
+
+    // Call Shopify API to send test webhook
+    const response = await shopify.sendTestWebhook(webhook.shopifyWebhookId);
+
+    if (!response.success) {
+      console.error(`Failed to trigger test webhook: ${response.error}`);
+      return {
+        success: false,
+        error: response.error || "Failed to trigger test webhook",
+      };
+    }
+
+    // Update status to testing
+    // Note: testStatus field needs to be added to schema first
+    // For now we'll just log it
+    console.log(`[Webhook] Test triggered for ${webhookId}`);
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error("Error triggering test webhook:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to trigger test webhook",
     };
   }
 }

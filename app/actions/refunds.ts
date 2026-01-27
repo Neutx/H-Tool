@@ -221,7 +221,7 @@ export async function processRefund(data: {
       try {
         // Use mock for development
         const shopifyResult = await shopify.mockCreateRefund(
-          order.shopifyOrderId,
+          String(order.shopifyOrderId),
           refundAmount
         );
 
@@ -231,7 +231,7 @@ export async function processRefund(data: {
             where: { id: refundTransaction.id },
             data: {
               status: "completed",
-              shopifyRefundId: shopifyResult.data?.refund?.id,
+              shopifyRefundId: shopifyResult.data?.refund?.id ? BigInt(shopifyResult.data.refund.id) : null,
               transactionId: shopifyResult.data?.refund?.transactions?.[0]?.id,
               processedAt: new Date(),
             },
@@ -317,7 +317,7 @@ export async function retryRefund(refundId: string) {
     // Try processing again
     if (refund.order.shopifyOrderId) {
       const shopifyResult = await shopify.mockCreateRefund(
-        refund.order.shopifyOrderId,
+        String(refund.order.shopifyOrderId),
         refund.refundAmount
       );
 
@@ -326,7 +326,7 @@ export async function retryRefund(refundId: string) {
           where: { id: refundId },
           data: {
             status: "completed",
-            shopifyRefundId: shopifyResult.data?.refund?.id,
+            shopifyRefundId: shopifyResult.data?.refund?.id ? BigInt(shopifyResult.data.refund.id) : null,
             processedAt: new Date(),
             errorMessage: null,
             errorCode: null,

@@ -7,6 +7,19 @@ const SHOPIFY_STORE_URL = process.env.SHOPIFY_STORE_URL;
 const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
 const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || "2024-01";
 
+/**
+ * Extract numeric ID from Shopify GID format
+ * Handles both GID format (gid://shopify/Refund/123) and plain numeric strings
+ */
+export function extractShopifyId(gidOrId: string | number): string {
+  const str = String(gidOrId);
+  if (str.startsWith("gid://")) {
+    const parts = str.split("/");
+    return parts[parts.length - 1];
+  }
+  return str;
+}
+
 interface ShopifyError {
   errors?: any;
   message?: string;
@@ -589,6 +602,15 @@ class ShopifyClient {
   async deleteWebhook(webhookId: string) {
     return this.request(`/webhooks/${webhookId}.json`, {
       method: "DELETE",
+    });
+  }
+
+  /**
+   * Send a test webhook
+   */
+  async sendTestWebhook(webhookId: string) {
+    return this.request(`/webhooks/${webhookId}/test.json`, {
+      method: "POST",
     });
   }
 

@@ -43,20 +43,36 @@ export async function POST(request: NextRequest) {
       return respondToWebhookError("Organization not found", 404);
     }
 
+    // Update webhook test status
+    await prisma.shopifyWebhook.updateMany({
+      where: {
+        organizationId: organization.id,
+        topic: "orders/cancelled",
+      },
+      data: {
+        testStatus: "success",
+        lastTestedAt: new Date(),
+      },
+    });
+
     // Extract order data
-    const orderId = payload.id.toString();
+    const orderIdRaw = payload.id.toString();
+    const orderIdNumeric = orderIdRaw.startsWith("gid://") 
+      ? orderIdRaw.split("/").pop() || orderIdRaw
+      : orderIdRaw;
+    const orderIdBigInt = BigInt(orderIdNumeric);
     const cancelledAt = new Date(payload.cancelled_at);
 
     // Upsert cancellation (idempotent)
     await prisma.shopifyCancellation.upsert({
-      where: { shopifyCancellationId: orderId },
+      where: { shopifyCancellationId: orderIdBigInt },
       update: {
         cancelledAt,
         cancelReason: payload.cancel_reason || null,
       },
       create: {
-        shopifyCancellationId: orderId,
-        shopifyOrderId: orderId,
+        shopifyCancellationId: orderIdBigInt,
+        shopifyOrderId: orderIdBigInt,
         cancelledAt,
         cancelReason: payload.cancel_reason || null,
       },
@@ -64,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     // Update order if it exists
     const order = await prisma.order.findFirst({
-      where: { shopifyOrderId: orderId },
+      where: { shopifyOrderId: orderIdBigInt },
     });
 
     if (order) {
@@ -88,10 +104,46 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`[Webhook] Processed cancellation for order ${orderId}`);
+    console.log(`[Webhook] Processed cancellation for order ${orderIdNumeric}`);
+
+    // Log webhook event
+    await prisma.webhookEvent.create({
+      data: {
+        organizationId: organization.id,
+        topic: "orders/cancelled",
+        payload: payload,
+        headers: { shopDomain },
+        success: true,
+      },
+    });
+
     return respondToWebhook();
   } catch (error) {
     console.error("[Webhook] Error processing orders/cancelled:", error);
+    
+    // Try to log error event
+    try {
+      const shopDomain = request.headers.get("X-Shopify-Shop-Domain");
+      if (shopDomain) {
+        const org = await prisma.organization.findFirst({
+          where: { shopifyStoreUrl: shopDomain.replace(".myshopify.com", "") },
+        });
+        if (org) {
+          await prisma.webhookEvent.create({
+            data: {
+              organizationId: org.id,
+              topic: "orders/cancelled",
+              payload: {},
+              success: false,
+              errorMessage: error instanceof Error ? error.message : "Unknown error",
+            },
+          });
+        }
+      }
+    } catch (logError) {
+      console.error("[Webhook] Failed to log error event:", logError);
+    }
+
     return respondToWebhookError(
       error instanceof Error ? error.message : "Internal server error",
       500

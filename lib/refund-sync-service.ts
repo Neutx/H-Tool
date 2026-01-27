@@ -6,6 +6,20 @@
 import { shopify } from "./shopify";
 import { prisma } from "./prisma";
 
+/**
+ * Extract numeric ID from Shopify GID format
+ * Handles both GID format (gid://shopify/Refund/123) and plain numeric strings
+ */
+function extractShopifyId(gidOrId: string): string {
+  // If it's a GID format, extract the numeric part
+  if (gidOrId.startsWith("gid://")) {
+    const parts = gidOrId.split("/");
+    return parts[parts.length - 1];
+  }
+  // Otherwise, assume it's already a numeric string
+  return gidOrId;
+}
+
 export interface SyncResult {
   success: boolean;
   syncedCount: number;
@@ -107,7 +121,6 @@ export async function syncShopifyRefunds(
 
     for (const refund of refunds) {
       try {
-
         // Extract refund amount from transactions
         const refundAmount = refund.transactions?.reduce(
           (sum: number, txn: any) => sum + parseFloat(txn.amount || "0"),
@@ -115,30 +128,36 @@ export async function syncShopifyRefunds(
         ) || 0;
 
         // Get order ID (handle both formats)
-        const shopifyOrderId = refund.orderId || refund.order?.id;
-        if (!shopifyOrderId) {
+        const shopifyOrderIdRaw = refund.orderId || refund.order?.id;
+        if (!shopifyOrderIdRaw) {
           result.diagnostics.push(`[Error] Refund ${refund.id} missing order ID, skipping`);
           continue;
         }
 
+        // Extract numeric IDs from GID format if needed, then convert to BigInt for Prisma
+        const refundIdNumeric = extractShopifyId(refund.id);
+        const orderIdNumeric = extractShopifyId(shopifyOrderIdRaw);
+        const refundIdBigInt = BigInt(refundIdNumeric);
+        const shopifyOrderIdBigInt = BigInt(orderIdNumeric);
+
         // Check if refund exists
         const existing = await prisma.refundTransaction.findFirst({
-          where: { shopifyRefundId: refund.id },
+          where: { shopifyRefundId: refundIdBigInt },
         });
 
         // Ensure order exists
         let dbOrder = await prisma.order.findFirst({
-          where: { shopifyOrderId },
+          where: { shopifyOrderId: shopifyOrderIdBigInt },
         });
 
         if (!dbOrder) {
-          result.diagnostics.push(`[Sync] Order ${shopifyOrderId} not found in DB, skipping refund`);
+          result.diagnostics.push(`[Sync] Order ${shopifyOrderIdRaw} not found in DB, skipping refund`);
           continue;
         }
 
         const refundData: any = {
-          shopifyRefundId: refund.id,
-          shopifyOrderId,
+          shopifyRefundId: refundIdBigInt,
+          shopifyOrderId: shopifyOrderIdBigInt,
           refundAmount,
           status: mapShopifyStatus(refund.transactions?.[0]?.status || "pending"),
           shopifySyncedAt: new Date(),

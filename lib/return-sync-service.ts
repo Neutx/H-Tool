@@ -4,7 +4,7 @@
  * Uses filtered API endpoint for efficient syncing
  */
 
-import { shopify } from "./shopify";
+import { shopify, extractShopifyId } from "./shopify";
 import { prisma } from "./prisma";
 
 export interface ReturnSyncResult {
@@ -87,19 +87,25 @@ export async function syncShopifyReturns(
     // Process each return
     for (const shopifyReturn of returns) {
       try {
+        // Extract numeric IDs from GID format
+        const orderIdNumeric = extractShopifyId(shopifyReturn.order_id);
+        const orderIdBigInt = BigInt(orderIdNumeric);
+        const returnIdNumeric = extractShopifyId(shopifyReturn.id);
+        const returnIdBigInt = BigInt(returnIdNumeric);
+
         // Ensure order exists in our DB
         let dbOrder = await prisma.order.findFirst({
-          where: { shopifyOrderId: shopifyReturn.order_id },
+          where: { shopifyOrderId: orderIdBigInt },
         });
 
         if (!dbOrder) {
-          result.diagnostics.push(`[Sync] Order ${shopifyReturn.order_id} not found in DB, skipping return`);
+          result.diagnostics.push(`[Sync] Order ${orderIdNumeric} not found in DB, skipping return`);
           continue;
         }
 
         // Check if return already exists
         const existing = await prisma.shopifyReturn.findUnique({
-          where: { shopifyReturnId: shopifyReturn.id },
+          where: { shopifyReturnId: returnIdBigInt },
           include: { lineItems: true },
         });
 
@@ -139,8 +145,8 @@ export async function syncShopifyReturns(
           // Create new return
           const newReturn = await prisma.shopifyReturn.create({
             data: {
-              shopifyReturnId: shopifyReturn.id,
-              shopifyOrderId: shopifyReturn.order_id,
+              shopifyReturnId: returnIdBigInt,
+              shopifyOrderId: orderIdBigInt,
               status: shopifyReturn.status,
               requestedAt,
               receivedAt,
@@ -165,8 +171,9 @@ export async function syncShopifyReturns(
         result.syncedCount++;
       } catch (itemError) {
         const errorMsg = itemError instanceof Error ? itemError.message : String(itemError);
-        result.errors.push(`Error syncing return ${shopifyReturn.id}: ${errorMsg}`);
-        result.diagnostics.push(`[Error] Failed to sync return ${shopifyReturn.id}: ${errorMsg}`);
+        const returnIdNumeric = extractShopifyId(shopifyReturn.id);
+        result.errors.push(`Error syncing return ${returnIdNumeric}: ${errorMsg}`);
+        result.diagnostics.push(`[Error] Failed to sync return ${returnIdNumeric}: ${errorMsg}`);
       }
     }
 
