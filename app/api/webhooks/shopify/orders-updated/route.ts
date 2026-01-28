@@ -19,7 +19,7 @@ function extractShopifyId(gidOrId: string | number): string {
 }
 
 /**
- * Handle orders/update webhook from Shopify
+ * Handle orders/updated webhook from Shopify
  * Shopify sends this when an order is updated
  */
 export async function POST(request: NextRequest) {
@@ -36,9 +36,16 @@ export async function POST(request: NextRequest) {
       return respondToWebhookError("Missing shop domain", 400);
     }
 
+    // Find organization by Shopify store URL (supports both `kreo-tech` and `kreo-tech.myshopify.com`)
+    const shopDomainNormalized = shopDomain.toLowerCase().trim();
+    const shopSlug = shopDomainNormalized.replace(".myshopify.com", "");
     const organization = await prisma.organization.findFirst({
       where: {
-        shopifyStoreUrl: shopDomain.replace(".myshopify.com", ""),
+        OR: [
+          { shopifyStoreUrl: shopSlug },
+          { shopifyStoreUrl: shopDomainNormalized },
+          { shopifyStoreUrl: `${shopSlug}.myshopify.com` },
+        ],
       },
     });
 
@@ -51,7 +58,7 @@ export async function POST(request: NextRequest) {
     await prisma.shopifyWebhook.updateMany({
       where: {
         organizationId: organization.id,
-        topic: "orders/update",
+        topic: "orders/updated",
       },
       data: {
         testStatus: "success",
@@ -59,7 +66,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`[Webhook] Processing orders/update for order ${payload.id}`);
+    console.log(`[Webhook] Processing orders/updated for order ${payload.id}`);
 
     const shopifyOrderId = extractShopifyId(payload.id);
     const orderIdBigInt = BigInt(shopifyOrderId);
@@ -205,7 +212,7 @@ export async function POST(request: NextRequest) {
       await prisma.webhookEvent.create({
         data: {
           organizationId: organization.id,
-          topic: "orders/update",
+          topic: "orders/updated",
           payload: payload,
           headers: { shopDomain },
           success: true,
@@ -266,7 +273,7 @@ export async function POST(request: NextRequest) {
         await prisma.webhookEvent.create({
           data: {
             organizationId: organization.id,
-            topic: "orders/update",
+            topic: "orders/updated",
             payload: payload,
             headers: { shopDomain },
             success: false,
@@ -315,7 +322,7 @@ export async function POST(request: NextRequest) {
         await prisma.webhookEvent.create({
           data: {
             organizationId: organization.id,
-            topic: "orders/update",
+            topic: "orders/updated",
             payload: payload,
             headers: { shopDomain },
             success: false,
@@ -348,7 +355,7 @@ export async function POST(request: NextRequest) {
       await prisma.webhookEvent.create({
         data: {
           organizationId: organization.id,
-          topic: "orders/update",
+          topic: "orders/updated",
           payload: payload,
           headers: { shopDomain },
           success: true,
@@ -362,7 +369,7 @@ export async function POST(request: NextRequest) {
     await prisma.shopifyWebhook.updateMany({
       where: {
         organizationId: organization.id,
-        topic: "orders/update",
+        topic: "orders/updated",
       },
       data: {
         lastTriggeredAt: new Date(),
@@ -371,7 +378,7 @@ export async function POST(request: NextRequest) {
 
     return respondToWebhook();
   } catch (error) {
-    console.error("[Webhook] Error processing orders/update:", error);
+    console.error("[Webhook] Error processing orders/updated:", error);
     
     // Try to log error event
     try {
@@ -384,7 +391,7 @@ export async function POST(request: NextRequest) {
           await prisma.webhookEvent.create({
             data: {
               organizationId: org.id,
-              topic: "orders/update",
+              topic: "orders/updated",
               payload: {},
               success: false,
               errorMessage: error instanceof Error ? error.message : "Unknown error",

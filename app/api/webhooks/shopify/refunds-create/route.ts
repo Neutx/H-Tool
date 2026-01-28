@@ -44,10 +44,16 @@ export async function POST(request: NextRequest) {
       return respondToWebhookError("Missing shop domain", 400);
     }
 
-    // Find organization by Shopify store URL
+    // Find organization by Shopify store URL (supports both `kreo-tech` and `kreo-tech.myshopify.com`)
+    const shopDomainNormalized = shopDomain.toLowerCase().trim();
+    const shopSlug = shopDomainNormalized.replace(".myshopify.com", "");
     const organization = await prisma.organization.findFirst({
       where: {
-        shopifyStoreUrl: shopDomain.replace(".myshopify.com", ""),
+        OR: [
+          { shopifyStoreUrl: shopSlug },
+          { shopifyStoreUrl: shopDomainNormalized },
+          { shopifyStoreUrl: `${shopSlug}.myshopify.com` },
+        ],
       },
     });
 

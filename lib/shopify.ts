@@ -37,6 +37,7 @@ class ShopifyClient {
     this.baseUrl = `https://${SHOPIFY_STORE_URL}/admin/api/${SHOPIFY_API_VERSION}`;
     this.headers = {
       "Content-Type": "application/json",
+      "Accept": "application/json",
       "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN || "",
     };
   }
@@ -49,6 +50,10 @@ class ShopifyClient {
     options: RequestInit = {}
   ): Promise<{ success: boolean; data?: T; error?: string }> {
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'lib/shopify.ts:request:pre',message:'Shopify request starting',data:{endpoint,method:(options as any)?.method || 'GET',hasBody:!!(options as any)?.body,baseUrlPreview:(this.baseUrl||'').replace(/\/admin\/api\/.*/,'/admin/api/<version>')},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion agent log
+
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
         headers: {
@@ -57,28 +62,62 @@ class ShopifyClient {
         },
       });
 
-      // Check content type before parsing JSON
+      // Check if response has a body and content type
       const contentType = response.headers.get("content-type");
+      const contentLength = response.headers.get("content-length");
       let data: any;
 
+      // #region agent log
+      fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'lib/shopify.ts:request:postHeaders',message:'Shopify response headers',data:{endpoint,status:response.status,ok:response.ok,contentType,contentLength},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion agent log
+
+      // Handle empty responses (e.g., webhook test endpoints)
+      if (contentLength === "0" || (!contentType && response.status === 200)) {
+        // Empty successful response
+        if (response.ok) {
+          // #region agent log
+          fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H3',location:'lib/shopify.ts:request:emptyOk',message:'Shopify empty-body success',data:{endpoint,status:response.status},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion agent log
+          return { success: true, data: {} as T };
+        }
+      }
+
+      // Try to parse response body if it exists
       if (contentType && contentType.includes("application/json")) {
         try {
-          data = await response.json();
+          const text = await response.text();
+          data = text ? JSON.parse(text) : {};
         } catch (jsonError) {
           console.error("Failed to parse JSON response:", jsonError);
-          const text = await response.text();
           return {
             success: false,
-            error: `Invalid JSON response from Shopify API. Status: ${response.status}. Response: ${text.substring(0, 200)}`,
+            error: `Invalid JSON response from Shopify API. Status: ${response.status}`,
           };
         }
+      } else if (contentType) {
+        // Non-JSON response with content type
+        try {
+          const text = await response.text();
+          if (!response.ok) {
+            return {
+              success: false,
+              error: `Non-JSON response from Shopify API. Status: ${response.status}. Response: ${text.substring(0, 200)}`,
+            };
+          }
+          data = { text };
+        } catch (err) {
+          console.error("Failed to read response text:", err);
+          data = {};
+        }
       } else {
-        // Non-JSON response (e.g., HTML error page)
-        const text = await response.text();
-        return {
-          success: false,
-          error: `Non-JSON response from Shopify API. Status: ${response.status}. Response: ${text.substring(0, 200)}`,
-        };
+        // No content type, try to read as text
+        try {
+          const text = await response.text();
+          data = text ? { text } : {};
+        } catch (err) {
+          console.error("Failed to read response:", err);
+          data = {};
+        }
       }
 
       if (!response.ok) {
@@ -107,15 +146,25 @@ class ShopifyClient {
 
         // Add HTTP status code for better debugging
         const statusText = response.statusText || `HTTP ${response.status}`;
+        // #region agent log
+        fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'lib/shopify.ts:request:error',message:'Shopify response not ok',data:{endpoint,status:response.status,statusText,errorMessagePreview:(errorMessage||'').slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion agent log
         return {
           success: false,
           error: `Shopify API error (${statusText}): ${errorMessage}`,
         };
       }
 
+      // #region agent log
+      fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'lib/shopify.ts:request:ok',message:'Shopify response ok',data:{endpoint,status:response.status,hasData:!!data,keys:(data && typeof data==='object')?Object.keys(data).slice(0,10):[],webhooksCount:(endpoint==='/webhooks.json' && data && typeof data==='object' && Array.isArray((data as any).webhooks))?(data as any).webhooks.length:undefined,webhooksTopicsPreview:(endpoint==='/webhooks.json' && data && typeof data==='object' && Array.isArray((data as any).webhooks))?(data as any).webhooks.slice(0,5).map((w:any)=>w.topic):undefined},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion agent log
       return { success: true, data: data as T };
     } catch (error) {
       console.error("Shopify API error:", error);
+
+      // #region agent log
+      fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H4',location:'lib/shopify.ts:request:exception',message:'Shopify request threw exception',data:{endpoint,errorType:(error as any)?.name || typeof error,errorMsg:String((error as any)?.message || error).slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion agent log
       
       // Handle network errors specifically
       if (error instanceof TypeError && error.message.includes("fetch")) {
@@ -557,6 +606,9 @@ class ShopifyClient {
    * Register a webhook with Shopify
    */
   async registerWebhook(topic: string, address: string) {
+    // #region agent log
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'lib/shopify.ts:registerWebhook:entry',message:'registerWebhook called',data:{topic,addressPreview:String(address||'').slice(0,180),apiVersion:String(process.env.SHOPIFY_API_VERSION||'').slice(0,40)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion agent log
     return this.request<{
       webhook: {
         id: string;
@@ -582,6 +634,9 @@ class ShopifyClient {
    * List all webhooks
    */
   async listWebhooks() {
+    // #region agent log
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'lib/shopify.ts:listWebhooks:entry',message:'listWebhooks called',data:{apiVersion:String(process.env.SHOPIFY_API_VERSION||'').slice(0,40)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion agent log
     return this.request<{
       webhooks: Array<{
         id: string;
@@ -609,9 +664,45 @@ class ShopifyClient {
    * Send a test webhook
    */
   async sendTestWebhook(webhookId: string) {
-    return this.request(`/webhooks/${webhookId}/test.json`, {
+    // #region agent log
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H3',location:'lib/shopify.ts:sendTestWebhook:entry',message:'sendTestWebhook called',data:{webhookIdPreview:String(webhookId||'').slice(0,40),apiVersion:String(process.env.SHOPIFY_API_VERSION||'').slice(0,40)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion agent log
+    const primary = await this.request(`/webhooks/${webhookId}/test.json`, {
       method: "POST",
     });
+
+    // Some Shopify API versions return 406 for the test endpoint specifically.
+    // Retry with a stable version for the test endpoint only.
+    if (!primary.success && (primary.error || "").includes("Not Acceptable")) {
+      // #region agent log
+      fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H3',location:'lib/shopify.ts:sendTestWebhook:retry',message:'sendTestWebhook retrying with fallback API version',data:{webhookIdPreview:String(webhookId||'').slice(0,40),fromVersion:String(process.env.SHOPIFY_API_VERSION||'').slice(0,40),fallbackVersion:'2024-01'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion agent log
+
+      try {
+        const fallbackUrl = `https://${SHOPIFY_STORE_URL}/admin/api/2024-01/webhooks/${webhookId}/test.json`;
+        const res = await fetch(fallbackUrl, {
+          method: "POST",
+          headers: {
+            ...this.headers,
+          },
+        });
+
+        // #region agent log
+        fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H3',location:'lib/shopify.ts:sendTestWebhook:retryResult',message:'sendTestWebhook retry result',data:{status:res.status,ok:res.ok,contentType:res.headers.get('content-type'),contentLength:res.headers.get('content-length')},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion agent log
+
+        if (res.ok) {
+          // Many test endpoints respond with empty body.
+          return { success: true, data: {} };
+        }
+      } catch (e) {
+        // #region agent log
+        fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H4',location:'lib/shopify.ts:sendTestWebhook:retryException',message:'sendTestWebhook retry threw',data:{errorMsg:String((e as any)?.message||e).slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion agent log
+      }
+    }
+
+    return primary;
   }
 
   /**

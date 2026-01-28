@@ -5,6 +5,43 @@ import { prisma } from "@/lib/prisma";
 // Force Node.js runtime (Prisma requires Node.js)
 export const runtime = "nodejs";
 
+type ShopifyTaxLine = {
+  price?: string;
+};
+
+type ShopifyOrderCustomer = {
+  id?: string | number;
+  email?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+};
+
+type ShopifyOrderLineItem = {
+  id: string | number;
+  sku?: string | null;
+  title?: string | null;
+  quantity?: number | null;
+  price?: string | null;
+  tax_lines?: ShopifyTaxLine[] | null;
+};
+
+type ShopifyOrderCreatePayload = {
+  id: string | number;
+  shop_domain?: string;
+  customer?: ShopifyOrderCustomer | null;
+  line_items?: ShopifyOrderLineItem[] | null;
+  order_number?: string | number | null;
+  name?: string | null;
+  status?: string | null;
+  financial_status?: string | null;
+  fulfillment_status?: string | null;
+  total_price?: string | null;
+  currency?: string | null;
+  created_at?: string | null;
+  shipping_address?: unknown;
+};
+
 /**
  * Extract numeric ID from Shopify GID format
  * Handles both GID format (gid://shopify/Refund/123) and plain numeric strings
@@ -27,7 +64,7 @@ function extractShopifyId(gidOrId: string | number): string {
 export async function POST(request: NextRequest) {
   try {
     // Parse and verify webhook payload
-    const { payload, isValid } = await parseWebhookPayload<any>(request);
+    const { payload, isValid } = await parseWebhookPayload<ShopifyOrderCreatePayload>(request);
 
     if (!isValid || !payload) {
       return respondToWebhookError("Invalid webhook signature", 401);
@@ -45,10 +82,16 @@ export async function POST(request: NextRequest) {
       return respondToWebhookError("Missing shop domain", 400);
     }
 
-    // Find organization by Shopify store URL
+    // Find organization by Shopify store URL (supports both `kreo-tech` and `kreo-tech.myshopify.com`)
+    const shopDomainNormalized = shopDomain.toLowerCase().trim();
+    const shopSlug = shopDomainNormalized.replace(".myshopify.com", "");
     const organization = await prisma.organization.findFirst({
       where: {
-        shopifyStoreUrl: shopDomain.replace(".myshopify.com", ""),
+        OR: [
+          { shopifyStoreUrl: shopSlug },
+          { shopifyStoreUrl: shopDomainNormalized },
+          { shopifyStoreUrl: `${shopSlug}.myshopify.com` },
+        ],
       },
     });
 
@@ -101,7 +144,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      if (!customer && payload.customer.email) {
+      if (!customer && payload.customer?.email) {
         // Fallback: try finding by email
         customer = await prisma.customer.findFirst({
           where: { 
@@ -126,9 +169,9 @@ export async function POST(request: NextRequest) {
           data: {
             organizationId: organization.id,
             shopifyCustomerId,
-            email: payload.customer.email || null,
-            name: `${payload.customer.first_name || ""} ${payload.customer.last_name || ""}`.trim() || "Unknown Customer",
-            phone: payload.customer.phone || null,
+            email: payload.customer?.email || null,
+            name: `${payload.customer?.first_name || ""} ${payload.customer?.last_name || ""}`.trim() || "Unknown Customer",
+            phone: payload.customer?.phone || null,
           },
         });
         customerId = customer.id;
@@ -147,7 +190,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Process Line Items & Check Products
-    const lineItemsToCreate = [];
+    const lineItemsToCreate: Array<{
+      shopifyLineItemId: string;
+      productId: string;
+      sku: string;
+      title: string;
+      quantity: number;
+      price: number;
+      totalPrice: number;
+      taxAmount: number;
+      inventoryManaged: boolean;
+    }> = [];
     const validLineItems = Array.isArray(payload.line_items) ? payload.line_items : [];
     
     for (const item of validLineItems) {
@@ -171,6 +224,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      const taxLines = Array.isArray(item.tax_lines) ? item.tax_lines : [];
       lineItemsToCreate.push({
         shopifyLineItemId: extractShopifyId(item.id),
         productId: product.id,
@@ -179,7 +233,7 @@ export async function POST(request: NextRequest) {
         quantity: item.quantity || 1,
         price: parseFloat(item.price || "0"),
         totalPrice: parseFloat(item.price || "0") * (item.quantity || 1),
-        taxAmount: parseFloat(item.tax_lines?.reduce((sum: number, tax: any) => sum + parseFloat(tax.price || "0"), 0) || "0"),
+        taxAmount: taxLines.reduce((sum, tax) => sum + parseFloat(tax?.price || "0"), 0),
         inventoryManaged: product.inventoryManaged,
       });
     }
@@ -202,7 +256,7 @@ export async function POST(request: NextRequest) {
         currency: payload.currency || "USD",
         customerId: customerId,
         orderDate: payload.created_at ? new Date(payload.created_at) : new Date(),
-        shippingAddress: payload.shipping_address || {},
+        shippingAddress: (payload.shipping_address as unknown) ?? {},
         lineItems: {
           create: lineItemsToCreate,
         },
@@ -216,7 +270,8 @@ export async function POST(request: NextRequest) {
       data: {
         organizationId: organization.id,
         topic: "orders/create",
-        payload: payload,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        payload: payload as unknown as any,
         headers: { shopDomain },
         success: true,
       },
