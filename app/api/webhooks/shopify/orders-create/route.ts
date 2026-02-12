@@ -63,10 +63,49 @@ function extractShopifyId(gidOrId: string | number): string {
  */
 export async function POST(request: NextRequest) {
   try {
+    const webhookTopic = "orders/create";
+    const shopDomainHeader = request.headers.get("X-Shopify-Shop-Domain") || null;
+    const webhookIdHeader = request.headers.get("X-Shopify-Webhook-Id") || null;
+    const isSelfTest = !!request.headers.get("X-H-Tool-Test-Topic");
+
     // Parse and verify webhook payload
     const { payload, isValid } = await parseWebhookPayload<ShopifyOrderCreatePayload>(request);
 
     if (!isValid || !payload) {
+      // Record invalid signature attempts (helps debug real Shopify delivery vs secret mismatch)
+      try {
+        if (shopDomainHeader) {
+          const shopDomainNormalized = shopDomainHeader.toLowerCase().trim();
+          const shopSlug = shopDomainNormalized.replace(".myshopify.com", "");
+          const org = await prisma.organization.findFirst({
+            where: {
+              OR: [
+                { shopifyStoreUrl: shopSlug },
+                { shopifyStoreUrl: shopDomainNormalized },
+                { shopifyStoreUrl: `${shopSlug}.myshopify.com` },
+              ],
+            },
+          });
+          if (org) {
+            await prisma.webhookEvent.create({
+              data: {
+                organizationId: org.id,
+                topic: webhookTopic,
+                payload: {},
+                headers: {
+                  shopDomain: shopDomainHeader,
+                  webhookId: webhookIdHeader,
+                  isSelfTest,
+                },
+                success: false,
+                errorMessage: "Invalid webhook signature",
+              },
+            });
+          }
+        }
+      } catch {
+        // ignore logging failures
+      }
       return respondToWebhookError("Invalid webhook signature", 401);
     }
 
@@ -126,6 +165,28 @@ export async function POST(request: NextRequest) {
 
     if (existingOrder) {
       console.log(`[Webhook] Order ${shopifyOrderId} already exists, skipping creation`);
+
+      // Still record that we received the webhook
+      try {
+        await prisma.webhookEvent.create({
+          data: {
+            organizationId: organization.id,
+            topic: webhookTopic,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            payload: payload as unknown as any,
+            headers: {
+              shopDomain,
+              webhookId: webhookIdHeader,
+              isSelfTest,
+            },
+            success: true,
+            errorMessage: "Order already exists; skipped creation",
+          },
+        });
+      } catch {
+        // ignore
+      }
+
       return respondToWebhook();
     }
 
@@ -183,6 +244,27 @@ export async function POST(request: NextRequest) {
       // But database schema requires customerId on Order
       console.warn(`[Webhook] Order ${shopifyOrderId} missing customer data`);
       
+      // Record receipt + reason (otherwise it looks like “nothing happened”)
+      try {
+        await prisma.webhookEvent.create({
+          data: {
+            organizationId: organization.id,
+            topic: webhookTopic,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            payload: payload as unknown as any,
+            headers: {
+              shopDomain,
+              webhookId: webhookIdHeader,
+              isSelfTest,
+            },
+            success: false,
+            errorMessage: "Missing customer data",
+          },
+        });
+      } catch {
+        // ignore
+      }
+
       // Try to find a default guest customer or fail
       // For now, we'll return success to Shopify but log error
       // In a real scenario, we might want a "Guest" customer record per organization
@@ -239,8 +321,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (lineItemsToCreate.length === 0) {
-      console.warn(`[Webhook] No valid line items found for order ${shopifyOrderId} (missing products?), skipping order`);
-      return respondToWebhook();
+      console.warn(
+        `[Webhook] No valid line items found for order ${shopifyOrderId} (missing products?). Creating order without line items.`
+      );
     }
 
     // Create Order
@@ -257,9 +340,13 @@ export async function POST(request: NextRequest) {
         customerId: customerId,
         orderDate: payload.created_at ? new Date(payload.created_at) : new Date(),
         shippingAddress: (payload.shipping_address as unknown) ?? {},
-        lineItems: {
-          create: lineItemsToCreate,
-        },
+        ...(lineItemsToCreate.length > 0
+          ? {
+              lineItems: {
+                create: lineItemsToCreate,
+              },
+            }
+          : {}),
       },
     });
 
@@ -269,11 +356,19 @@ export async function POST(request: NextRequest) {
     await prisma.webhookEvent.create({
       data: {
         organizationId: organization.id,
-        topic: "orders/create",
+        topic: webhookTopic,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         payload: payload as unknown as any,
-        headers: { shopDomain },
+        headers: {
+          shopDomain,
+          webhookId: webhookIdHeader,
+          isSelfTest,
+        },
         success: true,
+        errorMessage:
+          lineItemsToCreate.length === 0
+            ? "Order created without line items (missing products or no SKUs)"
+            : null,
       },
     });
 
@@ -296,8 +391,16 @@ export async function POST(request: NextRequest) {
     try {
       const shopDomain = request.headers.get("X-Shopify-Shop-Domain");
       if (shopDomain) {
+        const shopDomainNormalized = shopDomain.toLowerCase().trim();
+        const shopSlug = shopDomainNormalized.replace(".myshopify.com", "");
         const org = await prisma.organization.findFirst({
-          where: { shopifyStoreUrl: shopDomain.replace(".myshopify.com", "") },
+          where: {
+            OR: [
+              { shopifyStoreUrl: shopSlug },
+              { shopifyStoreUrl: shopDomainNormalized },
+              { shopifyStoreUrl: `${shopSlug}.myshopify.com` },
+            ],
+          },
         });
         if (org) {
           await prisma.webhookEvent.create({
@@ -305,6 +408,11 @@ export async function POST(request: NextRequest) {
               organizationId: org.id,
               topic: "orders/create",
               payload: {},
+              headers: {
+                shopDomain,
+                webhookId: request.headers.get("X-Shopify-Webhook-Id") || null,
+                isSelfTest: !!request.headers.get("X-H-Tool-Test-Topic"),
+              },
               success: false,
               errorMessage: error instanceof Error ? error.message : "Unknown error",
             },

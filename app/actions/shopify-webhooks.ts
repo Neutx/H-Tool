@@ -1,5 +1,6 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { shopify } from "@/lib/shopify";
 import { prisma } from "@/lib/prisma";
 
@@ -51,10 +52,6 @@ export async function registerShopifyWebhooks(
   organizationId: string
 ): Promise<ActionResult<WebhookInfo[]>> {
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'app/actions/shopify-webhooks.ts:registerShopifyWebhooks:entry',message:'Bulk webhook registration start',data:{organizationId,hasBaseUrl:!!process.env.NEXT_PUBLIC_APP_URL,baseUrlPreview:String(process.env.NEXT_PUBLIC_APP_URL||'').slice(0,120)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
-
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
     });
@@ -79,10 +76,6 @@ export async function registerShopifyWebhooks(
       try {
         const webhookUrl = getWebhookUrl(topic);
 
-        // #region agent log
-        fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'app/actions/shopify-webhooks.ts:registerShopifyWebhooks:topic',message:'Attempt register topic',data:{topic,webhookUrlPreview:webhookUrl.slice(0,180),shopDomainPreview:String(organization?.shopifyStoreUrl||'').slice(0,120)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion agent log
-
         // Check if webhook already exists in our DB
         const existing = await prisma.shopifyWebhook.findUnique({
           where: {
@@ -103,10 +96,6 @@ export async function registerShopifyWebhooks(
 
         // Register new webhook with Shopify
         const response = await shopify.registerWebhook(topic, webhookUrl);
-
-        // #region agent log
-        fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'app/actions/shopify-webhooks.ts:registerShopifyWebhooks:shopifyResp',message:'Shopify registerWebhook returned',data:{topic,success:!!(response as any)?.success,hasWebhook:!!(response as any)?.data?.webhook,errorPreview:String((response as any)?.error||'').slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion agent log
 
         if (response.success && response.data?.webhook) {
           const webhook = response.data.webhook;
@@ -143,22 +132,12 @@ export async function registerShopifyWebhooks(
           });
         } else {
           console.error(`Failed to register webhook ${topic}:`, response.error);
-          // #region agent log
-          fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'app/actions/shopify-webhooks.ts:registerShopifyWebhooks:failed',message:'Shopify registerWebhook failed (no webhook in response)',data:{topic,errorPreview:String((response as any)?.error||'').slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion agent log
         }
       } catch (error) {
         console.error(`Error registering webhook ${topic}:`, error);
         // Continue with other webhooks even if one fails
-        // #region agent log
-        fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H4',location:'app/actions/shopify-webhooks.ts:registerShopifyWebhooks:catch',message:'Error registering webhook topic (catch)',data:{topic,errorMsg:String((error as any)?.message||error).slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion agent log
       }
     }
-
-    // #region agent log
-    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'app/actions/shopify-webhooks.ts:registerShopifyWebhooks:exit',message:'Bulk webhook registration finished',data:{organizationId,registeredCount:registeredWebhooks.length,topicsAttempted:topics.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
 
     return {
       success: true,
@@ -166,9 +145,6 @@ export async function registerShopifyWebhooks(
     };
   } catch (error) {
     console.error("Error registering webhooks:", error);
-    // #region agent log
-    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H4',location:'app/actions/shopify-webhooks.ts:registerShopifyWebhooks:outerCatch',message:'Bulk webhook registration outer catch',data:{organizationId,errorMsg:String((error as any)?.message||error).slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to register webhooks",
@@ -185,10 +161,6 @@ export async function registerSingleWebhook(
 ): Promise<ActionResult<WebhookInfo>> {
   try {
     const webhookUrl = getWebhookUrl(topic);
-
-    // #region agent log
-    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'app/actions/shopify-webhooks.ts:registerSingleWebhook:entry',message:'Single webhook registration start',data:{organizationId,topic,webhookUrlPreview:webhookUrl.slice(0,180),hasBaseUrl:!!process.env.NEXT_PUBLIC_APP_URL},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
 
     // Check if webhook already exists in database
     const existing = await prisma.shopifyWebhook.findUnique({
@@ -216,12 +188,10 @@ export async function registerSingleWebhook(
 
     // Check if webhook with this URL already exists in Shopify
     const shopifyListResponse = await shopify.listWebhooks();
-    // #region agent log
-    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'app/actions/shopify-webhooks.ts:registerSingleWebhook:listWebhooks',message:'Shopify listWebhooks returned',data:{topic,success:!!(shopifyListResponse as any)?.success,count:((shopifyListResponse as any)?.data?.webhooks||[]).length,errorPreview:String((shopifyListResponse as any)?.error||'').slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
     if (shopifyListResponse.success && shopifyListResponse.data?.webhooks) {
       const existingShopifyWebhook = shopifyListResponse.data.webhooks.find(
-        (wh: any) => wh.topic === topic && wh.address === webhookUrl
+        (wh: { topic: string; address: string }) =>
+          wh.topic === topic && wh.address === webhookUrl
       );
       
       if (existingShopifyWebhook) {
@@ -258,9 +228,6 @@ export async function registerSingleWebhook(
 
     // Register new webhook with Shopify
     const response = await shopify.registerWebhook(topic, webhookUrl);
-    // #region agent log
-    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'app/actions/shopify-webhooks.ts:registerSingleWebhook:registerResp',message:'Shopify registerWebhook returned',data:{topic,success:!!(response as any)?.success,hasWebhook:!!(response as any)?.data?.webhook,errorPreview:String((response as any)?.error||'').slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
 
     if (response.success && response.data?.webhook) {
       const webhook = response.data.webhook;
@@ -299,9 +266,6 @@ export async function registerSingleWebhook(
     }
   } catch (error) {
     console.error(`Error registering webhook ${topic}:`, error);
-    // #region agent log
-    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H4',location:'app/actions/shopify-webhooks.ts:registerSingleWebhook:catch',message:'Single webhook registration threw',data:{topic,errorMsg:String((error as any)?.message||error).slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to register webhook",
@@ -316,6 +280,8 @@ export async function listShopifyWebhooks(
   organizationId: string
 ): Promise<ActionResult<WebhookInfo[]>> {
   try {
+    type ShopifyWebhookListItem = { id: string | number; topic: string; address: string };
+
     const requiredTopics = [
       "orders/create",
       "orders/updated",
@@ -329,41 +295,62 @@ export async function listShopifyWebhooks(
       orderBy: { topic: "asc" },
     });
 
-    // Check which webhooks have received data
-    const webhookEvents = await prisma.webhookEvent.groupBy({
-      by: ['topic'],
+    // Check which webhooks have received REAL data (exclude UI self-tests).
+    // We do this in JS (not JSON-path SQL) to avoid SQL three-valued-logic issues where missing JSON keys can exclude rows.
+    const recentEvents = await prisma.webhookEvent.findMany({
       where: {
         organizationId,
         topic: { in: requiredTopics },
       },
-      _count: {
-        id: true,
+      select: {
+        topic: true,
+        headers: true,
       },
+      orderBy: { createdAt: "desc" },
+      take: 500,
     });
 
-    const topicsWithData = new Set(webhookEvents.map(e => e.topic));
+    const topicsWithData = new Set(
+      recentEvents
+        .filter((e) => {
+          const h = e.headers as unknown;
+          const obj = h && typeof h === "object" ? (h as Record<string, unknown>) : {};
+          return obj.selfTest !== true && obj.isSelfTest !== true;
+        })
+        .map((e) => e.topic)
+    );
 
     // Also fetch from Shopify to sync status
     const shopifyResponse = await shopify.listWebhooks();
-    const shopifyWebhooks = shopifyResponse.success && shopifyResponse.data?.webhooks
-      ? shopifyResponse.data.webhooks
+    const shopifyListOk = !!(shopifyResponse.success && shopifyResponse.data?.webhooks);
+    const shopifyWebhooks: ShopifyWebhookListItem[] = shopifyListOk
+      ? (shopifyResponse.data?.webhooks as ShopifyWebhookListItem[])
       : [];
 
     // Build webhook info for all required topics
     const webhooks: WebhookInfo[] = requiredTopics.map((topic) => {
       const dbWebhook = dbWebhooks.find((w) => w.topic === topic);
       const hasReceivedData = topicsWithData.has(topic);
-      
-      if (dbWebhook) {
-        const shopifyWebhook = shopifyWebhooks.find(
-          (sw) => sw.id === dbWebhook.shopifyWebhookId
-        );
+      const expectedAddress = getWebhookUrl(topic);
 
+      // Determine if Shopify actually has this webhook right now.
+      // If Shopify list fails, we fall back to DB state (avoid flipping UI to "not registered" on transient Shopify API issues).
+      const shopifyMatchById = dbWebhook
+        ? shopifyWebhooks.find((sw) => String(sw.id) === String(dbWebhook.shopifyWebhookId))
+        : undefined;
+      const shopifyMatchByTopicAddress = shopifyWebhooks.find(
+        (sw) => sw.topic === topic && sw.address === expectedAddress
+      );
+      const isActuallyRegistered = shopifyListOk
+        ? !!(shopifyMatchById || shopifyMatchByTopicAddress)
+        : !!dbWebhook;
+      
+      if (dbWebhook && isActuallyRegistered) {
         return {
           id: dbWebhook.id,
           topic: dbWebhook.topic,
           address: dbWebhook.address,
-          status: shopifyWebhook ? "active" : dbWebhook.status,
+          status: "active",
           shopifyWebhookId: dbWebhook.shopifyWebhookId,
           lastTriggeredAt: dbWebhook.lastTriggeredAt,
           lastTestedAt: dbWebhook.lastTestedAt,
@@ -372,11 +359,11 @@ export async function listShopifyWebhooks(
           isRegistered: true,
         };
       } else {
-        // Webhook not registered yet
+        // Webhook not registered yet (or DB is stale vs Shopify)
         return {
           id: `unregistered-${topic}`,
           topic,
-          address: getWebhookUrl(topic),
+          address: expectedAddress,
           status: "not_registered",
           shopifyWebhookId: "",
           lastTriggeredAt: null,
@@ -553,29 +540,35 @@ export async function triggerShopifyWebhookTest(
   organizationId: string
 ): Promise<ActionResult<void>> {
   try {
+    // #region agent log (H1/H2) trigger start
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/shopify-webhooks.ts:triggerShopifyWebhookTest:start',message:'Trigger webhook test invoked',data:{webhookId,organizationId},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1'} )}).catch(()=>{});
+    // #endregion
+
     const webhook = await prisma.shopifyWebhook.findUnique({
       where: { id: webhookId },
     });
 
     if (!webhook || webhook.organizationId !== organizationId) {
+      // #region agent log (H4) invalid webhook/org
+      fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/shopify-webhooks.ts:triggerShopifyWebhookTest:notFoundOrDenied',message:'Webhook not found or access denied',data:{found:!!webhook,webhookOrgId:webhook?.organizationId ?? null},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'} )}).catch(()=>{});
+      // #endregion
       return {
         success: false,
         error: "Webhook not found or access denied",
       };
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'post-fix',hypothesisId:'H5',location:'app/actions/shopify-webhooks.ts:triggerShopifyWebhookTest:entry',message:'Trigger webhook test (server action)',data:{webhookId,topic:webhook.topic,hasAddress:!!webhook.address},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion agent log
-
     // Attempt Shopify's native test endpoint first (may return 406 on some stores/versions)
     const shopifyTest = await shopify.sendTestWebhook(webhook.shopifyWebhookId);
 
-    if (!shopifyTest.success) {
-      // #region agent log
-      fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'post-fix',hypothesisId:'H5',location:'app/actions/shopify-webhooks.ts:triggerShopifyWebhookTest:shopifyFailed',message:'Shopify test endpoint failed, falling back to self-test delivery',data:{topic:webhook.topic,errorPreview:String(shopifyTest.error||'').slice(0,180)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion agent log
+    // #region agent log (H1/H2) shopify test result
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/shopify-webhooks.ts:triggerShopifyWebhookTest:shopifyTestResult',message:'Shopify /test.json attempt completed',data:{topic:webhook.topic,shopifyWebhookId:String(webhook.shopifyWebhookId),shopifyTestSuccess:!!shopifyTest.success,shopifyTestError:shopifyTest.success?null:(shopifyTest.error||null)},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1'} )}).catch(()=>{});
+    // #endregion
 
+    if (!shopifyTest.success) {
+      // #region agent log (H2) falling back to self-test
+      fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/shopify-webhooks.ts:triggerShopifyWebhookTest:selfTestFallback',message:'Shopify test failed; using self-test delivery',data:{topic:webhook.topic,address:webhook.address},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2'} )}).catch(()=>{});
+      // #endregion
       // Self-test: deliver a signed webhook request directly to our endpoint
       // This validates HMAC verification + handler DB writes without relying on Shopify's /test endpoint.
       const crypto = await import("crypto");
@@ -592,22 +585,120 @@ export async function triggerShopifyWebhookTest(
         ? (org?.shopifyStoreUrl || "")
         : `${org?.shopifyStoreUrl || ""}.myshopify.com`;
 
-      const testPayload = {
-        id: `gid://shopify/Order/${Date.now()}`, // unique-ish
-        shop_domain: shopDomain,
-        created_at: new Date().toISOString(),
-        note: "H-Tool self-test webhook delivery",
-      };
+      const nowIso = new Date().toISOString();
+
+      // Prefer a real existing order ID (avoids FK issues in handlers that require orders)
+      const existingOrderForOrg = await prisma.order.findFirst({
+        where: {
+          organizationId,
+          shopifyOrderId: { not: null },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      const fallbackOrderIdNumeric = String(Date.now());
+      const orderIdNumeric = existingOrderForOrg?.shopifyOrderId
+        ? String(existingOrderForOrg.shopifyOrderId)
+        : fallbackOrderIdNumeric;
+
+      // Ensure an Order row exists for topics that rely on FK relations (e.g., cancellations).
+      // This avoids false-negative "Test" failures due to missing parent records.
+      if (webhook.topic === "orders/cancelled") {
+        const orderIdBigInt = BigInt(orderIdNumeric);
+        const existingOrderRow = await prisma.order.findFirst({
+          where: {
+            organizationId,
+            shopifyOrderId: orderIdBigInt,
+          },
+        });
+
+        if (!existingOrderRow) {
+          const customer = await prisma.customer.create({
+            data: {
+              organizationId,
+              shopifyCustomerId: `self-test-${Date.now()}`,
+              email: "self-test@example.com",
+              name: "Self Test",
+              phone: null,
+            },
+          });
+
+          await prisma.order.create({
+            data: {
+              organizationId,
+              shopifyOrderId: orderIdBigInt,
+              orderNumber: `SELF-TEST-${orderIdNumeric}`,
+              status: "open",
+              paymentStatus: "paid",
+              fulfillmentStatus: "unfulfilled",
+              totalAmount: 0,
+              currency: "USD",
+              customerId: customer.id,
+              orderDate: new Date(),
+              shippingAddress: {},
+            },
+          });
+        }
+      }
+
+      const testPayload: Record<string, unknown> = (() => {
+        switch (webhook.topic) {
+          case "orders/cancelled":
+            return {
+              id: orderIdNumeric,
+              name: `#TEST-CANCEL-${orderIdNumeric}`,
+              cancelled_at: nowIso,
+              cancel_reason: "customer",
+              shop_domain: shopDomain,
+            };
+          case "refunds/create":
+            return {
+              id: `gid://shopify/Refund/${Date.now()}`,
+              order_id: orderIdNumeric,
+              created_at: nowIso,
+              note: "H-Tool self-test webhook delivery",
+              transactions: [
+                {
+                  id: `gid://shopify/Transaction/${Date.now()}`,
+                  status: "success",
+                  amount: "0.00",
+                  gateway: "manual",
+                  processed_at: nowIso,
+                },
+              ],
+              refund_line_items: [],
+              shop_domain: shopDomain,
+            };
+          case "orders/create":
+          case "orders/updated":
+          default:
+            return {
+              id: orderIdNumeric,
+              shop_domain: shopDomain,
+              created_at: nowIso,
+              note: "H-Tool self-test webhook delivery",
+              customer: {
+                id: `gid://shopify/Customer/${Date.now()}`,
+                email: "self-test@example.com",
+                first_name: "Self",
+                last_name: "Test",
+                phone: null,
+              },
+              line_items: [],
+              total_price: "0.00",
+              currency: "USD",
+              financial_status: "paid",
+              fulfillment_status: null,
+              status: "open",
+            };
+        }
+      })();
 
       const body = JSON.stringify(testPayload);
       const hmac = crypto
         .createHmac("sha256", secret)
         .update(body, "utf8")
         .digest("base64");
-
-      // #region agent log
-      fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'post-fix',hypothesisId:'H5',location:'app/actions/shopify-webhooks.ts:triggerShopifyWebhookTest:selfDeliver',message:'Sending self-test webhook delivery',data:{topic:webhook.topic,addressPreview:String(webhook.address||'').slice(0,180),shopDomainPreview:String(shopDomain||'').slice(0,80)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion agent log
 
       const res = await fetch(webhook.address, {
         method: "POST",
@@ -621,9 +712,16 @@ export async function triggerShopifyWebhookTest(
         body,
       });
 
-      // #region agent log
-      fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'post-fix',hypothesisId:'H5',location:'app/actions/shopify-webhooks.ts:triggerShopifyWebhookTest:selfDeliverResult',message:'Self-test webhook delivery result',data:{topic:webhook.topic,status:res.status,ok:res.ok,matchedPath:res.headers.get('x-matched-path'),nextErrorStatus:res.headers.get('x-next-error-status'),vercelId:res.headers.get('x-vercel-id')},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion agent log
+      // #region agent log (H2/H4) self-test HTTP result
+      fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/shopify-webhooks.ts:triggerShopifyWebhookTest:selfTestHttpResult',message:'Self-test delivery response received',data:{topic:webhook.topic,status:res.status,ok:res.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2'} )}).catch(()=>{});
+      // #endregion
+
+      try {
+        // Drain body (best effort) to avoid leaving the stream unread.
+        await res.text();
+      } catch {
+        // ignore
+      }
 
       if (!res.ok) {
         return {
@@ -631,7 +729,31 @@ export async function triggerShopifyWebhookTest(
           error: `Self-test delivery failed with HTTP ${res.status}`,
         };
       }
+
+      // Mark as "received data" for UI by recording a WebhookEvent row on successful self-delivery.
+      // This matches the UI's hasReceivedData logic (topic exists in WebhookEvent table).
+      try {
+        await prisma.webhookEvent.create({
+          data: {
+            organizationId,
+            topic: webhook.topic,
+            payload: testPayload as unknown as Prisma.InputJsonValue,
+            headers: {
+              shopDomain,
+              selfTest: true,
+              address: webhook.address,
+            } as unknown as Prisma.InputJsonValue,
+            success: true,
+          },
+        });
+      } catch {
+        // ignore: self-test marker is best-effort
+      }
     }
+
+    // #region agent log (H1/H3) returning success to UI
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/shopify-webhooks.ts:triggerShopifyWebhookTest:returning',message:'Returning success=true to UI after test trigger',data:{topic:webhook.topic,usedSelfTest:!shopifyTest.success},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3'} )}).catch(()=>{});
+    // #endregion
 
     // Update status to testing
     // Note: testStatus field needs to be added to schema first
@@ -674,9 +796,11 @@ export async function cleanupStaleWebhooks(
     const dbWebhookIds = new Set(dbWebhooks.map((wh) => wh.shopifyWebhookId));
 
     // Find webhooks in Shopify that are not in database
-    const staleWebhooks = shopifyResponse.data.webhooks.filter(
-      (wh: any) => !dbWebhookIds.has(String(wh.id))
-    );
+    const staleWebhooks = shopifyResponse.data.webhooks.filter((wh) => {
+      const id =
+        typeof wh === "object" && wh !== null && "id" in wh ? (wh as { id: unknown }).id : undefined;
+      return !dbWebhookIds.has(String(id ?? ""));
+    });
 
     // Delete stale webhooks
     let cleaned = 0;

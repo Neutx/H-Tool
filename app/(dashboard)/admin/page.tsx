@@ -781,7 +781,7 @@ export default function AdminPage() {
                                 const isTesting = webhookTesting === webhook.id;
                                 
                                 // Status indicator logic
-                                let statusDot = "bg-gray-400"; // Not registered
+                                let statusDot = "bg-red-500"; // Not registered
                                 let statusText = "Not Registered";
                                 let statusTooltip = "Click Register to activate this webhook";
                                 

@@ -11,6 +11,11 @@ export const runtime = "nodejs";
  */
 export async function POST(request: NextRequest) {
   try {
+    const webhookTopic = "orders/cancelled";
+    const shopDomainHeader = request.headers.get("X-Shopify-Shop-Domain") || null;
+    const webhookIdHeader = request.headers.get("X-Shopify-Webhook-Id") || null;
+    const isSelfTest = !!request.headers.get("X-H-Tool-Test-Topic");
+
     // Parse and verify webhook payload
     const { payload, isValid } = await parseWebhookPayload<{
       id: string;
@@ -21,6 +26,39 @@ export async function POST(request: NextRequest) {
     }>(request);
 
     if (!isValid || !payload) {
+      try {
+        if (shopDomainHeader) {
+          const shopDomainNormalized = shopDomainHeader.toLowerCase().trim();
+          const shopSlug = shopDomainNormalized.replace(".myshopify.com", "");
+          const org = await prisma.organization.findFirst({
+            where: {
+              OR: [
+                { shopifyStoreUrl: shopSlug },
+                { shopifyStoreUrl: shopDomainNormalized },
+                { shopifyStoreUrl: `${shopSlug}.myshopify.com` },
+              ],
+            },
+          });
+          if (org) {
+            await prisma.webhookEvent.create({
+              data: {
+                organizationId: org.id,
+                topic: webhookTopic,
+                payload: {},
+                headers: {
+                  shopDomain: shopDomainHeader,
+                  webhookId: webhookIdHeader,
+                  isSelfTest,
+                },
+                success: false,
+                errorMessage: "Invalid webhook signature",
+              },
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
       return respondToWebhookError("Invalid webhook signature", 401);
     }
 
@@ -69,7 +107,45 @@ export async function POST(request: NextRequest) {
     const orderIdBigInt = BigInt(orderIdNumeric);
     const cancelledAt = new Date(payload.cancelled_at);
 
-    // Upsert cancellation (idempotent)
+    // Update order if it exists
+    const order = await prisma.order.findFirst({
+      where: { shopifyOrderId: orderIdBigInt },
+    });
+
+    if (!order) {
+      console.warn(`[Webhook] Order ${orderIdNumeric} not found in DB, skipping cancellation upsert`);
+
+      // Update webhook last triggered timestamp (still received the webhook)
+      await prisma.shopifyWebhook.updateMany({
+        where: {
+          organizationId: organization.id,
+          topic: "orders/cancelled",
+        },
+        data: {
+          lastTriggeredAt: new Date(),
+        },
+      });
+
+      // Log webhook event (received but not fully processed)
+      await prisma.webhookEvent.create({
+        data: {
+          organizationId: organization.id,
+          topic: webhookTopic,
+          payload: payload,
+          headers: {
+            shopDomain,
+            webhookId: webhookIdHeader,
+            isSelfTest,
+          },
+          success: false,
+          errorMessage: "Order not found in DB; cancellation record not created",
+        },
+      });
+
+      return respondToWebhook();
+    }
+
+    // Upsert cancellation (idempotent). Requires the Order to exist due to FK constraint.
     await prisma.shopifyCancellation.upsert({
       where: { shopifyCancellationId: orderIdBigInt },
       update: {
@@ -84,20 +160,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update order if it exists
-    const order = await prisma.order.findFirst({
-      where: { shopifyOrderId: orderIdBigInt },
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        cancelledAt,
+        cancelReason: payload.cancel_reason || null,
+      },
     });
-
-    if (order) {
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          cancelledAt,
-          cancelReason: payload.cancel_reason || null,
-        },
-      });
-    }
 
     // Update webhook last triggered timestamp
     await prisma.shopifyWebhook.updateMany({
@@ -116,9 +185,13 @@ export async function POST(request: NextRequest) {
     await prisma.webhookEvent.create({
       data: {
         organizationId: organization.id,
-        topic: "orders/cancelled",
+        topic: webhookTopic,
         payload: payload,
-        headers: { shopDomain },
+        headers: {
+          shopDomain,
+          webhookId: webhookIdHeader,
+          isSelfTest,
+        },
         success: true,
       },
     });
@@ -131,8 +204,16 @@ export async function POST(request: NextRequest) {
     try {
       const shopDomain = request.headers.get("X-Shopify-Shop-Domain");
       if (shopDomain) {
+        const shopDomainNormalized = shopDomain.toLowerCase().trim();
+        const shopSlug = shopDomainNormalized.replace(".myshopify.com", "");
         const org = await prisma.organization.findFirst({
-          where: { shopifyStoreUrl: shopDomain.replace(".myshopify.com", "") },
+          where: {
+            OR: [
+              { shopifyStoreUrl: shopSlug },
+              { shopifyStoreUrl: shopDomainNormalized },
+              { shopifyStoreUrl: `${shopSlug}.myshopify.com` },
+            ],
+          },
         });
         if (org) {
           await prisma.webhookEvent.create({
@@ -140,6 +221,11 @@ export async function POST(request: NextRequest) {
               organizationId: org.id,
               topic: "orders/cancelled",
               payload: {},
+              headers: {
+                shopDomain,
+                webhookId: request.headers.get("X-Shopify-Webhook-Id") || null,
+                isSelfTest: !!request.headers.get("X-H-Tool-Test-Topic"),
+              },
               success: false,
               errorMessage: error instanceof Error ? error.message : "Unknown error",
             },

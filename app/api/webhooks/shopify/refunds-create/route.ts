@@ -12,6 +12,11 @@ export const runtime = "nodejs";
  */
 export async function POST(request: NextRequest) {
   try {
+    const webhookTopic = "refunds/create";
+    const shopDomainHeader = request.headers.get("X-Shopify-Shop-Domain") || null;
+    const webhookIdHeader = request.headers.get("X-Shopify-Webhook-Id") || null;
+    const isSelfTest = !!request.headers.get("X-H-Tool-Test-Topic");
+
     // Parse and verify webhook payload
     const { payload, isValid } = await parseWebhookPayload<{
       id: string;
@@ -34,6 +39,39 @@ export async function POST(request: NextRequest) {
     }>(request);
 
     if (!isValid || !payload) {
+      try {
+        if (shopDomainHeader) {
+          const shopDomainNormalized = shopDomainHeader.toLowerCase().trim();
+          const shopSlug = shopDomainNormalized.replace(".myshopify.com", "");
+          const org = await prisma.organization.findFirst({
+            where: {
+              OR: [
+                { shopifyStoreUrl: shopSlug },
+                { shopifyStoreUrl: shopDomainNormalized },
+                { shopifyStoreUrl: `${shopSlug}.myshopify.com` },
+              ],
+            },
+          });
+          if (org) {
+            await prisma.webhookEvent.create({
+              data: {
+                organizationId: org.id,
+                topic: webhookTopic,
+                payload: {},
+                headers: {
+                  shopDomain: shopDomainHeader,
+                  webhookId: webhookIdHeader,
+                  isSelfTest,
+                },
+                success: false,
+                errorMessage: "Invalid webhook signature",
+              },
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
       return respondToWebhookError("Invalid webhook signature", 401);
     }
 
@@ -85,6 +123,25 @@ export async function POST(request: NextRequest) {
 
     if (!order) {
       console.warn(`[Webhook] Order ${orderIdNumeric} not found in DB, skipping refund`);
+      // Record receipt + reason (useful when refunds arrive before orders)
+      try {
+        await prisma.webhookEvent.create({
+          data: {
+            organizationId: organization.id,
+            topic: webhookTopic,
+            payload: payload,
+            headers: {
+              shopDomain,
+              webhookId: webhookIdHeader,
+              isSelfTest,
+            },
+            success: false,
+            errorMessage: "Order not found in DB; refund skipped",
+          },
+        });
+      } catch {
+        // ignore
+      }
       // Still return 200 to Shopify (don't retry)
       return respondToWebhook();
     }
@@ -190,9 +247,13 @@ export async function POST(request: NextRequest) {
     await prisma.webhookEvent.create({
       data: {
         organizationId: organization.id,
-        topic: "refunds/create",
+        topic: webhookTopic,
         payload: payload,
-        headers: { shopDomain },
+        headers: {
+          shopDomain,
+          webhookId: webhookIdHeader,
+          isSelfTest,
+        },
         success: true,
       },
     });
@@ -205,8 +266,16 @@ export async function POST(request: NextRequest) {
     try {
       const shopDomain = request.headers.get("X-Shopify-Shop-Domain");
       if (shopDomain) {
+        const shopDomainNormalized = shopDomain.toLowerCase().trim();
+        const shopSlug = shopDomainNormalized.replace(".myshopify.com", "");
         const org = await prisma.organization.findFirst({
-          where: { shopifyStoreUrl: shopDomain.replace(".myshopify.com", "") },
+          where: {
+            OR: [
+              { shopifyStoreUrl: shopSlug },
+              { shopifyStoreUrl: shopDomainNormalized },
+              { shopifyStoreUrl: `${shopSlug}.myshopify.com` },
+            ],
+          },
         });
         if (org) {
           await prisma.webhookEvent.create({
@@ -214,6 +283,11 @@ export async function POST(request: NextRequest) {
               organizationId: org.id,
               topic: "refunds/create",
               payload: {},
+              headers: {
+                shopDomain,
+                webhookId: request.headers.get("X-Shopify-Webhook-Id") || null,
+                isSelfTest: !!request.headers.get("X-H-Tool-Test-Topic"),
+              },
               success: false,
               errorMessage: error instanceof Error ? error.message : "Unknown error",
             },

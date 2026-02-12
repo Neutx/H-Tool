@@ -24,9 +24,47 @@ function extractShopifyId(gidOrId: string | number): string {
  */
 export async function POST(request: NextRequest) {
   try {
+    const webhookTopic = "orders/updated";
+    const shopDomainHeader = request.headers.get("X-Shopify-Shop-Domain") || null;
+    const webhookIdHeader = request.headers.get("X-Shopify-Webhook-Id") || null;
+    const isSelfTest = !!request.headers.get("X-H-Tool-Test-Topic");
+
     const { payload, isValid } = await parseWebhookPayload<any>(request);
 
     if (!isValid || !payload) {
+      try {
+        if (shopDomainHeader) {
+          const shopDomainNormalized = shopDomainHeader.toLowerCase().trim();
+          const shopSlug = shopDomainNormalized.replace(".myshopify.com", "");
+          const org = await prisma.organization.findFirst({
+            where: {
+              OR: [
+                { shopifyStoreUrl: shopSlug },
+                { shopifyStoreUrl: shopDomainNormalized },
+                { shopifyStoreUrl: `${shopSlug}.myshopify.com` },
+              ],
+            },
+          });
+          if (org) {
+            await prisma.webhookEvent.create({
+              data: {
+                organizationId: org.id,
+                topic: webhookTopic,
+                payload: {},
+                headers: {
+                  shopDomain: shopDomainHeader,
+                  webhookId: webhookIdHeader,
+                  isSelfTest,
+                },
+                success: false,
+                errorMessage: "Invalid webhook signature",
+              },
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
       return respondToWebhookError("Invalid webhook signature", 401);
     }
 
@@ -212,9 +250,13 @@ export async function POST(request: NextRequest) {
       await prisma.webhookEvent.create({
         data: {
           organizationId: organization.id,
-          topic: "orders/updated",
+          topic: webhookTopic,
           payload: payload,
-          headers: { shopDomain },
+          headers: {
+            shopDomain,
+            webhookId: webhookIdHeader,
+            isSelfTest,
+          },
           success: true,
         },
       });
@@ -273,9 +315,13 @@ export async function POST(request: NextRequest) {
         await prisma.webhookEvent.create({
           data: {
             organizationId: organization.id,
-            topic: "orders/updated",
+            topic: webhookTopic,
             payload: payload,
-            headers: { shopDomain },
+            headers: {
+              shopDomain,
+              webhookId: webhookIdHeader,
+              isSelfTest,
+            },
             success: false,
             errorMessage: "Missing customer data",
           },
@@ -318,18 +364,9 @@ export async function POST(request: NextRequest) {
       }
 
       if (lineItemsToCreate.length === 0) {
-        console.warn(`[Webhook] No valid line items for order ${shopifyOrderId}`);
-        await prisma.webhookEvent.create({
-          data: {
-            organizationId: organization.id,
-            topic: "orders/updated",
-            payload: payload,
-            headers: { shopDomain },
-            success: false,
-            errorMessage: "No valid line items (missing products)",
-          },
-        });
-        return respondToWebhook();
+        console.warn(
+          `[Webhook] No valid line items for order ${shopifyOrderId} (missing products?). Creating order without line items.`
+        );
       }
 
       await prisma.order.create({
@@ -345,9 +382,13 @@ export async function POST(request: NextRequest) {
           customerId: customerId,
           orderDate: payload.created_at ? new Date(payload.created_at) : new Date(),
           shippingAddress: payload.shipping_address || {},
-          lineItems: {
-            create: lineItemsToCreate,
-          },
+          ...(lineItemsToCreate.length > 0
+            ? {
+                lineItems: {
+                  create: lineItemsToCreate,
+                },
+              }
+            : {}),
         },
       });
 
@@ -355,10 +396,18 @@ export async function POST(request: NextRequest) {
       await prisma.webhookEvent.create({
         data: {
           organizationId: organization.id,
-          topic: "orders/updated",
+          topic: webhookTopic,
           payload: payload,
-          headers: { shopDomain },
+          headers: {
+            shopDomain,
+            webhookId: webhookIdHeader,
+            isSelfTest,
+          },
           success: true,
+          errorMessage:
+            lineItemsToCreate.length === 0
+              ? "Order created without line items (missing products or no SKUs)"
+              : null,
         },
       });
 
@@ -384,8 +433,16 @@ export async function POST(request: NextRequest) {
     try {
       const shopDomain = request.headers.get("X-Shopify-Shop-Domain");
       if (shopDomain) {
+        const shopDomainNormalized = shopDomain.toLowerCase().trim();
+        const shopSlug = shopDomainNormalized.replace(".myshopify.com", "");
         const org = await prisma.organization.findFirst({
-          where: { shopifyStoreUrl: shopDomain.replace(".myshopify.com", "") },
+          where: {
+            OR: [
+              { shopifyStoreUrl: shopSlug },
+              { shopifyStoreUrl: shopDomainNormalized },
+              { shopifyStoreUrl: `${shopSlug}.myshopify.com` },
+            ],
+          },
         });
         if (org) {
           await prisma.webhookEvent.create({
@@ -393,6 +450,11 @@ export async function POST(request: NextRequest) {
               organizationId: org.id,
               topic: "orders/updated",
               payload: {},
+              headers: {
+                shopDomain,
+                webhookId: request.headers.get("X-Shopify-Webhook-Id") || null,
+                isSelfTest: !!request.headers.get("X-H-Tool-Test-Topic"),
+              },
               success: false,
               errorMessage: error instanceof Error ? error.message : "Unknown error",
             },

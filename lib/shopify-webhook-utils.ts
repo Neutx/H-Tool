@@ -59,10 +59,18 @@ export async function parseWebhookPayload<T = any>(
   request: Request
 ): Promise<{ payload: T; isValid: boolean }> {
   try {
+    // #region agent log (H1/H2/H3) parse entry (no secrets)
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/shopify-webhook-utils.ts:parseWebhookPayload:entry',message:'Webhook request received (pre-parse)',data:{hasHmac:!!request.headers.get('X-Shopify-Hmac-Sha256'),hasShopifyWebhookId:!!request.headers.get('X-Shopify-Webhook-Id'),isSelfTest:!!request.headers.get('X-H-Tool-Test-Topic'),hasShopDomain:!!request.headers.get('X-Shopify-Shop-Domain')},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3'} )}).catch(()=>{});
+    // #endregion
+
     const hmacHeader = request.headers.get("X-Shopify-Hmac-Sha256");
     const rawBody = await request.text();
 
     const isValid = verifyShopifyWebhook(rawBody, hmacHeader);
+
+    // #region agent log (H1/H2/H3) verification outcome (no secrets)
+    fetch('http://127.0.0.1:7246/ingest/b2266f99-14f8-4aa6-9bf9-5891ccc40bc4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/shopify-webhook-utils.ts:parseWebhookPayload:verified',message:'Webhook HMAC verification computed',data:{isValid:!!isValid,secretConfigured:!!(process.env.SHOPIFY_WEBHOOK_SECRET)},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3'} )}).catch(()=>{});
+    // #endregion
 
     if (!isValid) {
       return { payload: null as any, isValid: false };
